@@ -360,10 +360,10 @@ function updateReadout(){
   for (let s2=0;s2<D.S;s2++){
     const raw = FEAT[frame*D.S + s2];
     const m2 = D.fmeta[s2];
-    const val = (raw===65535) ? '\u2013'
-              : (m2.lo + (raw/65534)*m2.span).toFixed(3);
+    // no placeholder dash when the trace has no value here: the name alone
+    const val = (raw===65535) ? '' : (m2.lo + (raw/65534)*m2.span).toFixed(3);
     h += '<span><i class="sw" style="background:'+m2.colour+'"></i>'
-       + m2.name + ' <b>' + val + '</b></span>';
+       + m2.name + (val ? ' <b>' + val + '</b>' : '') + '</span>';
   }
   legend.innerHTML = h;
 }
