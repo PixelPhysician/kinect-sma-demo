@@ -122,7 +122,7 @@ TARGET_12_FEATURES = [
 
 FEATURE_DISPLAY_NAMES = {
     "norm_jerk_R": "Log Dim. Jerk (LDLJ)",
-    "elbow_rom_R": "Elbow ROM (deg)",
+    "elbow_rom_R": "Elbow Flex/Ext ROM (deg)",
     "shoulder_flexext_rom_R": "Shoulder Flex/Ext ROM (deg)",
     "shoulder_abdadd_rom_R": "Shoulder Abd/Add ROM (deg)",
     "shoulder_girdle_rom_R": "Shoulder Girdle ROM (normalised)",
