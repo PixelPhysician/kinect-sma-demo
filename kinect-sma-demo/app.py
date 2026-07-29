@@ -75,10 +75,17 @@ st.markdown("""
 <style>
   .block-container {padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1500px;}
   h1, h2, h3 {color:#1f2733; letter-spacing:-0.01em;}
-  .hero {background:linear-gradient(100deg,#16305a 0%,#2b5a8f 55%,#3f7fa8 100%);
-         color:#fff; padding:1.5rem 1.9rem; border-radius:14px; margin-bottom:1.1rem;}
-  .hero h1 {color:#fff; font-size:1.75rem; margin:0 0 .35rem 0;}
-  .hero p  {color:#d7e5f5; font-size:.95rem; margin:0; max-width:62rem; line-height:1.5;}
+  /* A quiet card rather than a coloured banner: a thin accent rule, neutral
+     ground, dark text. For a solid navy block instead, set
+     background:#1d3c63; color:#fff and give h1/p light colours. */
+  .hero {background:#f7f9fc; border:1px solid #e4e9f0; border-left:4px solid #2b5a8f;
+         padding:1.25rem 1.6rem 1.35rem 1.6rem; border-radius:8px;
+         margin-bottom:1.25rem;}
+  .hero h1 {color:#1f2733; font-size:1.5rem; font-weight:650;
+            margin:0 0 .45rem 0; letter-spacing:-0.015em;}
+  .hero p  {color:#5b6672; font-size:.88rem; margin:0; max-width:64rem;
+            line-height:1.6;}
+  .hero strong {color:#1f2733; font-weight:600;}
   .pill {display:inline-block; padding:.16rem .62rem; border-radius:999px;
          font-size:.72rem; font-weight:600; letter-spacing:.02em;}
   .ok   {background:#e3f4e8; color:#1c6b34;}
@@ -379,12 +386,6 @@ with _tabs["Session viewer"]:
     with st.spinner("Preparing…"):
         payload = window_payload(PATHS[name], 0, N, tuple(selected))
     components.html(PLY.html(payload), height=700, scrolling=False)
-
-    if selected:
-        st.markdown('<span class="cap">Traces shown: ' + " &nbsp;·&nbsp; ".join(
-            f"<b>{K.FEATURE_DISPLAY_NAMES[k]}</b>"
-            + (f" - {K.TRACE_MEANING[k]}" if K.TRACE_MEANING.get(k) else "")
-            for k in selected) + "</span>", unsafe_allow_html=True)
 
     st.divider()
     st.markdown("##### Whole recording")
