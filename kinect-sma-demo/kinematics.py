@@ -134,18 +134,20 @@ FEATURE_DOMAIN = {
     "trunk_comp_R": "Functional patterns", "pct_above_shoulder_R": "Functional patterns",
 }
 
+# Only the cumulative traces are annotated. The instantaneous and rolling ones
+# are left unannotated on purpose, to be described in the accompanying text.
 TRACE_MEANING = {
-    "norm_jerk_R": "rolling log dimensionless jerk (4 s window)",
-    "elbow_rom_R": "instantaneous elbow angle",
-    "shoulder_flexext_rom_R": "instantaneous sagittal shoulder angle",
-    "shoulder_abdadd_rom_R": "instantaneous frontal shoulder angle",
-    "shoulder_girdle_rom_R": "instantaneous shoulder elevation / shoulder width",
-    "neck_rotation_rom": "instantaneous signed neck rotation",
-    "neck_flexext_rom": "instantaneous head-to-trunk angle",
-    "thoracic_ext_rom": "instantaneous upper-to-lower trunk angle",
+    "norm_jerk_R": "",
+    "elbow_rom_R": "",
+    "shoulder_flexext_rom_R": "",
+    "shoulder_abdadd_rom_R": "",
+    "shoulder_girdle_rom_R": "",
+    "neck_rotation_rom": "",
+    "neck_flexext_rom": "",
+    "thoracic_ext_rom": "",
     "workspace_R_m3": "cumulative convex-hull volume of the hand path",
-    "vel_hand_R_mean": "instantaneous hand speed",
-    "trunk_comp_R": "rolling trunk path / hand path ratio (4 s window)",
+    "vel_hand_R_mean": "",
+    "trunk_comp_R": "",
     "pct_above_shoulder_R": "cumulative % of frames with hand above shoulder",
 }
 
