@@ -141,7 +141,7 @@ def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
                         color=col, alpha=0.9, zorder=2)
             mids = [(a + b) / 2 for a, b in runs]
             ax.scatter(mids, [i] * len(mids), marker="D", s=26, color=col,
-                       alpha=0.95, edgecolors="white", linewidths=0.5, zorder=3)
+                       alpha=0.95, edgecolors=col, linewidths=0.5, zorder=3)
         ax.set_yticks(range(len(flag_names)))
         ax.set_yticklabels(flag_names, fontsize=7)
         ax.set_ylim(-0.8, len(flag_names) - 0.2)
@@ -163,9 +163,10 @@ def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
                for s in sorted(set(int(v) for v in np.unique(stage)))]
     if nbody is not None and (nbody != 1).any():
         phase_h.append(mpatches.Patch(color="#d62728", label="second body in frame"))
+    scored = {nm.split("-")[0] for nm in (flag_names or [])}
     mov_h = [mpatches.Patch(color=K.MOVEMENT_COLORS[m],
                             label=K.MOVEMENT_LABELS.get(m, m))
-             for m in movements if m in K.MOVEMENT_COLORS]
+             for m in movements if m in K.MOVEMENT_COLORS and m in scored]
 
     fig.subplots_adjust(left=AX_LEFT, right=AX_RIGHT, top=0.775, bottom=0.155,
                         hspace=0.18)
