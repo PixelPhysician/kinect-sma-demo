@@ -563,7 +563,9 @@ def distribution_table(traces):
             "Median": np.median(v), "Mean": v.mean(), "SD": v.std(ddof=1),
             "5th": p[0], "10th": p[1], "25th": p[2],
             "75th": p[3], "90th": p[4], "95th": p[5],
-            "Skewness": float(skew(v)), "Kurtosis": float(kurtosis(v)),
+            # skewness and kurtosis are undefined for a constant trace
+            "Skewness": float(skew(v)) if v.std() > 1e-12 else np.nan,
+            "Kurtosis": float(kurtosis(v)) if v.std() > 1e-12 else np.nan,
             "Range (max-min)": float(v.max() - v.min()),
         })
     return rows
