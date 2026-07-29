@@ -31,7 +31,7 @@ MUTED = "#8a93a0"
 # the whole-recording charts are stacked, so their plotting areas are pinned to
 # the same figure fractions and they line up frame for frame
 FIG_W = 13.2
-AX_LEFT, AX_RIGHT = 0.075, 0.988
+AX_LEFT, AX_RIGHT = 0.105, 0.988   # room for the "Completed" label
 
 
 def _proj(view, xyz):
@@ -129,13 +129,21 @@ def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
             v = flags[:, i].astype(bool)
             if not v.any():
                 continue
-            base = nm.split("-")[0]
-            for a, b, on in K.stage_segments(v.astype(np.int8)):
-                if on:
-                    ax.plot([a, b], [i, i], lw=4.2, solid_capstyle="butt",
-                            color=K.MOVEMENT_COLORS.get(base, "#666666"), alpha=0.9)
+            col = K.MOVEMENT_COLORS.get(nm.split("-")[0], "#666666")
+            runs = [(a, b) for a, b, on in K.stage_segments(v.astype(np.int8)) if on]
+            if not runs:
+                continue
+            # a scored repetition lasts a fraction of a second out of tens of
+            # thousands of frames, so a bar alone is sub-pixel wide: the bar keeps
+            # the duration and a diamond guarantees the event is visible
+            for a, b in runs:
+                ax.plot([a, b], [i, i], lw=3.0, solid_capstyle="butt",
+                        color=col, alpha=0.9, zorder=2)
+            mids = [(a + b) / 2 for a, b in runs]
+            ax.scatter(mids, [i] * len(mids), marker="D", s=26, color=col,
+                       alpha=0.95, edgecolors="white", linewidths=0.5, zorder=3)
         ax.set_yticks(range(len(flag_names)))
-        ax.set_yticklabels(flag_names, fontsize=6.5)
+        ax.set_yticklabels(flag_names, fontsize=7)
         ax.set_ylim(-0.8, len(flag_names) - 0.2)
         ax.set_ylabel("Completed", rotation=0, ha="right", va="center", color=MUTED)
         ax.grid(axis="x", alpha=0.2)
@@ -219,7 +227,7 @@ def draw_features(traces, selected, frame=None, normalise=True, max_points=2500,
     if span is not None:
         ax.axvspan(span[0], span[1], color="#1f2733", alpha=0.10, zorder=1)
     ax.set_xlim(lo, hi - 1 if hi > lo else lo + 1)
-    ax.set_xlabel("Frame (gameplay frames, 30 Hz)", color=MUTED)
+    ax.set_xlabel("Frame", color=MUTED)
     ax.set_ylabel("Normalised 0-1" if normalise else "Raw value", color=MUTED)
     ax.tick_params(labelsize=7.5, colors=MUTED)
     ax.legend(fontsize=7.5, loc="lower left", bbox_to_anchor=(0, 1.02),
