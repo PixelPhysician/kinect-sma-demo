@@ -117,13 +117,13 @@ PROFILES = {
         capability=0.42,          # 0 = minimal, 1 = full protocol amplitude
         rep_hz=0.30,              # repetitions per second
         trunk_gain=3.4,           # trunk compensation multiplier
-        tremor_mm=4.0, noise_mm=3.6, drop_rate=0.030, stature=1.00,
+        tremor_mm=2.6, noise_mm=3.2, drop_rate=0.030, stature=1.00,
         success_rate=0.45,        # fraction of repetitions reaching the target range
     ),
     "P02": dict(
         label="Stronger motor profile (synthetic)",
         sma_type="III", functional="walking_assisted", hfmse=34.0, rulm=25.0,
-        capability=0.92, rep_hz=0.55, trunk_gain=0.40,
+        capability=0.92, rep_hz=0.45, trunk_gain=0.40,
         tremor_mm=2.2, noise_mm=3.0, drop_rate=0.012, stature=1.12,
         success_rate=0.88,
     ),
@@ -162,11 +162,81 @@ def _smooth(rng, n, scale, hz):
 
 
 def _ramp(n, lo, hi, hz, rng, phase=0.0):
-    """Smooth repeated excursion between lo and hi."""
+    """Smooth repeated excursion between lo and hi (used for calibration sweeps)."""
     t = np.arange(n) / FPS
     jitter = _smooth(rng, n, 0.45, max(hz * 0.5, 0.05))
     c = 0.5 - 0.5 * np.cos(2 * np.pi * hz * t + phase + jitter)
     return lo + (hi - lo) * c
+
+
+def _minjerk(t):
+    """Minimum-jerk position profile, the standard model for a voluntary reach."""
+    return 10 * t ** 3 - 15 * t ** 4 + 6 * t ** 5
+
+
+def _rep_envelope(n, rng, n_reps, hold=(0.08, 0.24), pause=(0.10, 0.34),
+                  success_rate=0.8, fatigue=0.22, vigour=1.0):
+    """
+    A block of discrete repetitions rather than a sine wave.
+
+    Every repetition gets its own duration, rise/fall asymmetry, hold at the
+    extreme, and inter-repetition pause. Amplitude varies rep to rep: some reach
+    the target, some fall short, and all of them decay slightly as the block
+    goes on. `vigour` above 1 shortens the movement itself and lengthens the
+    pause after it, so a stronger participant moves faster between longer rests.
+
+    Returns (envelope in 0..1, list of (start, end), list of hit flags,
+             list of (hold_start, hold_end)).
+    """
+    env = np.zeros(n)
+    spans, hits, holds = [], [], []
+    if n_reps < 1 or n < 12:
+        return env, spans, hits, holds
+
+    edges = np.linspace(0, n, n_reps + 1)
+    if n_reps > 1:                                   # uneven repetition lengths
+        edges[1:-1] += rng.normal(0, n / (n_reps * 7.0), n_reps - 1)
+    edges = np.clip(np.sort(edges), 0, n).astype(int)
+
+    for r in range(n_reps):
+        a, b = int(edges[r]), int(edges[r + 1])
+        L = b - a
+        if L < 8:
+            continue
+        hit = bool(rng.random() < success_rate)
+        amp = 1.0 if hit else float(rng.uniform(0.40, 0.85))
+        amp *= 1.0 - fatigue * (r / max(1, n_reps - 1))
+        amp *= float(rng.uniform(0.90, 1.10))
+
+        hf, pf = float(rng.uniform(*hold)), float(rng.uniform(*pause))
+        active = max(4, int(L * (1.0 - hf - pf) / max(0.4, vigour)))
+        rise = max(2, int(active * rng.uniform(0.40, 0.60)))   # rise/fall asymmetry
+        fall = max(2, active - rise)
+        hold_n = max(1, int(L * hf))
+        pause_n = max(0, L - rise - hold_n - fall)
+
+        t = a
+        env[t:t + rise] = amp * _minjerk(np.linspace(0, 1, rise, endpoint=False))
+        t += rise
+        hs = t
+        env[t:t + hold_n] = amp
+        t += hold_n
+        env[t:t + fall] = amp * _minjerk(np.linspace(1, 0, fall, endpoint=False))
+        t += fall
+        # the pause stays at zero, back in the neutral resting position
+        spans.append((a, b))
+        hits.append(hit)
+        holds.append((hs, hs + hold_n))
+    return env, spans, hits, holds
+
+
+# how many repetitions a block contains, and how well they go
+BLOCK_STYLES = [
+    ("standard", 1.00, 1.00, 0.42),
+    ("long",     1.90, 0.95, 0.32),      # a persistent stretch, more reps
+    ("short",    0.50, 1.05, 0.14),      # a quick couple of reps
+    ("tired",    1.10, 0.55, 0.12),      # fatigued: most reps fall short
+]
 
 
 # =========================================================================
@@ -249,47 +319,79 @@ def angle_program(p, blocks, rng):
             mov_id[i:j] = MOVEMENTS.index(mov)
         R = side != "Left"
         sfx = "R" if R else "L"
-        hits = bool(rng.random() < p["success_rate"])
-        reach = 1.0 if hits else float(rng.uniform(0.45, 0.8))
-        hz = hz0
 
         if st == 6:
             # calibration sweeps the full available range once per degree of freedom
-            A["elev_R"][i:j] = _ramp(n, 5, 5 + 130 * cap, 0.12, rng)
-            A["horiz_R"][i:j] = _ramp(n, 0, 80 * cap, 0.12, rng, phase=1.1)
-            A["elb_R"][i:j] = _ramp(n, 20, 20 + 120 * cap, 0.16, rng)
-            A["neck_rot"][i:j] = _ramp(n, -45 * cap, 45 * cap, 0.10, rng)
-        elif st != 7 or mov is None:
+            A["elev_R"][i:j] = _ramp(n, 5, 135, 0.12, rng)
+            A["horiz_R"][i:j] = _ramp(n, 0, 80, 0.12, rng, phase=1.1)
+            A["elb_R"][i:j] = _ramp(n, 20, 140, 0.16, rng)
+            A["neck_rot"][i:j] = _ramp(n, -45, 45, 0.10, rng)
+            i = j
+            continue
+
+        if st != 7 or mov is None:
+            # menus, the room between potions, and the rests inside a potion:
+            # near-neutral idling with a little postural drift
             A["elev_" + sfx][i:j] = 8 + _smooth(rng, n, 3.0, 0.25)
             A["neck_rot"][i:j] = _smooth(rng, n, 8.0, 0.2)
-        elif mov == "EF":
-            A["elb_" + sfx][i:j] = _ramp(n, 30, 30 + 70 * reach, hz, rng)
-            A["elev_" + sfx][i:j] = 12 + _smooth(rng, n, 3.0, hz)
-            flags[i:j, GESTURE_FLAGS.index("EF-" + ("R" if R else "L"))] = int(hits)
-        elif mov == "HA":
-            A["elev_" + sfx][i:j] = _ramp(n, 30, 30 + 50 * reach, hz * 0.9, rng)
-            A["horiz_" + sfx][i:j] = _ramp(n, 5, 5 + 65 * reach, hz, rng, phase=0.6)
-            A["elb_" + sfx][i:j] = 88 + _smooth(rng, n, 9.0, hz)
-            flags[i:j, GESTURE_FLAGS.index("HA-" + ("R" if R else "L"))] = int(hits)
-        elif mov == "HR":
-            amp = 45 * reach * (1 if R else -1)
-            A["neck_rot"][i:j] = _ramp(n, 0, amp, hz * 0.8, rng)
-            flags[i:j, GESTURE_FLAGS.index("HR-" + ("R" if R else "L"))] = int(hits)
-        elif mov == "TE":
-            A["trunk_pitch"][i:j] = _ramp(n, 0, -22 * reach, hz * 0.7, rng)
-            A["retract"][i:j] = _ramp(n, 0, 34 * reach, hz * 0.7, rng)
-            A["elev_R"][i:j] = _ramp(n, 10, 10 + 35 * reach, hz * 0.7, rng)
-            A["elev_L"][i:j] = _ramp(n, 10, 10 + 35 * reach, hz * 0.7, rng)
-            flags[i:j, GESTURE_FLAGS.index("TE")] = int(hits)
-        elif mov == "OC":
-            A["open_" + sfx][i:j] = _ramp(n, 0.05, 0.05 + 0.9 * reach, hz * 1.6, rng)
-            A["elev_" + sfx][i:j] = 34 + _smooth(rng, n, 4.0, hz)
-            A["elb_" + sfx][i:j] = 84 + _smooth(rng, n, 6.0, hz)
-            flags[i:j, GESTURE_FLAGS.index("OC-" + ("R" if R else "L"))] = int(hits)
-        elif mov == "REACH":
-            A["elev_" + sfx][i:j] = _ramp(n, 20, 20 + 110 * reach, hz * 0.8, rng)
-            A["horiz_" + sfx][i:j] = _ramp(n, 20, 20 + 60 * reach, hz * 0.8, rng, 0.3)
-            A["elb_" + sfx][i:j] = _ramp(n, 95, 95 - 70 * reach, hz * 0.8, rng)
+            i = j
+            continue
+
+        # ---- a movement block -------------------------------------------
+        # blocks differ in how many repetitions they contain and how well they
+        # go, so the same movement never looks quite the same twice
+        style_i = int(rng.choice(len(BLOCK_STYLES), p=[b[3] for b in BLOCK_STYLES]))
+        style, rep_mul, ok_mul, _w = BLOCK_STYLES[style_i]
+        dur = n / FPS
+        seq = mov in ("HR", "TE", "OC")           # sequential moves hold the extreme
+        n_reps = int(max(1, round(dur * hz0 * rep_mul * rng.uniform(0.8, 1.25))))
+        # a repetition cannot be arbitrarily quick: a continuous movement needs
+        # about 1.6 s, a sequential one about 2.8 s including the hold and return
+        n_reps = int(min(n_reps, dur / (2.8 if seq else 1.6)))
+        n_reps = max(1, n_reps)
+        ok = float(np.clip(p["success_rate"] * ok_mul, 0.05, 0.98))
+        env, spans, hits, holds = _rep_envelope(
+            n, rng, n_reps,
+            hold=(0.14, 0.32) if seq else (0.06, 0.18),
+            pause=(0.14, 0.38) if seq else (0.08, 0.26),
+            success_rate=ok, fatigue=0.28 if style == "tired" else 0.16,
+            vigour=0.45 + 1.15 * cap)
+
+        done = np.zeros(n, bool)                  # frames where the game scores a rep
+        for (a0, b0), hit in zip(holds, hits):
+            if hit:
+                done[a0:b0] = True
+
+        def mark(code):
+            flags[i:j, GESTURE_FLAGS.index(code)] = done.astype(np.int8)
+
+        if mov == "EF":                           # elbow flexion, 30-100 deg
+            A["elb_" + sfx][i:j] = 30 + 70 * env
+            A["elev_" + sfx][i:j] = 12 + 6 * env
+            mark("EF-" + ("R" if R else "L"))
+        elif mov == "HA":                         # horizontal abduction
+            A["elev_" + sfx][i:j] = 30 + 50 * env
+            A["horiz_" + sfx][i:j] = 5 + 65 * env
+            A["elb_" + sfx][i:j] = 88 + 10 * env
+            mark("HA-" + ("R" if R else "L"))
+        elif mov == "HR":                         # head rotation to ~45 deg and back
+            A["neck_rot"][i:j] = 45 * env * (1 if R else -1)
+            mark("HR-" + ("R" if R else "L"))
+        elif mov == "TE":                         # thoracic extension to ~190 deg
+            A["trunk_pitch"][i:j] = -22 * env
+            A["retract"][i:j] = 34 * env
+            A["elev_R"][i:j] = 10 + 35 * env
+            A["elev_L"][i:j] = 10 + 35 * env
+            mark("TE")
+        elif mov == "OC":                         # fist, then opening
+            A["open_" + sfx][i:j] = 0.05 + 0.9 * env
+            A["elev_" + sfx][i:j] = 34 + 8 * env
+            A["elb_" + sfx][i:j] = 84 + 12 * env
+            mark("OC-" + ("R" if R else "L"))
+        elif mov == "REACH":                      # lateral reaching, arm extends
+            A["elev_" + sfx][i:j] = 20 + 150 * env
+            A["horiz_" + sfx][i:j] = 20 + 60 * env
+            A["elb_" + sfx][i:j] = 95 - 70 * env
         i = j
 
     # The movement the participant is ASKED for is the same regardless of ability.
@@ -315,10 +417,26 @@ def angle_program(p, blocks, rng):
         A[k] = A[k] * (1.0 - 0.16 * fatigue * (1.2 - cap))
     A["trunk_pitch"] = A["trunk_pitch"] * (1.0 + 0.35 * fatigue * p["trunk_gain"] * 0.4)
 
-    # tracking-level jitter on top of the motor programme
+    # ---- jitter, in three layers -------------------------------------
+    t = np.arange(N) / FPS
+    effort = np.clip(demand / 2.0, 0.0, 1.0)
+
+    # 1. postural and tracking drift: slow, always present
     for k in ("elev_R", "elev_L", "horiz_R", "horiz_L", "elb_R", "elb_L",
               "neck_rot", "neck_pitch"):
-        A[k] = A[k] + _smooth(rng, N, 2.6 * (1.4 - cap), 2.2)
+        A[k] = A[k] + _smooth(rng, N, 1.1 * (1.5 - cap), 0.8)
+
+    # 2. intention tremor: 3.5-6.5 Hz, growing with effort and with weakness, so
+    #    part of it survives the 5 Hz filter and reaches the jerk metric
+    for k, g in (("elev_R", 1.0), ("horiz_R", 1.0), ("elb_R", 1.0),
+                 ("elev_L", 0.6), ("horiz_L", 0.6), ("elb_L", 0.6)):
+        f = float(rng.uniform(3.5, 6.5))
+        amp = g * (0.35 + 2.9 * (1.0 - cap)) * (0.25 + 0.75 * effort)
+        A[k] = A[k] + amp * np.sin(2 * np.pi * f * t + rng.uniform(0, 2 * np.pi))
+
+    # 3. execution noise: broadband, scaled by how demanding the movement is
+    for k in ("elev_R", "horiz_R", "elb_R", "elev_L", "horiz_L", "elb_L"):
+        A[k] = A[k] + rng.normal(0, 0.55 * (1.4 - cap), N) * (0.3 + 0.7 * effort)
 
     return A, stage, mov_id, flags, N
 
