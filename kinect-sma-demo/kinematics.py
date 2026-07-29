@@ -156,19 +156,24 @@ ROM_LIKE = ["elbow_rom_R", "shoulder_flexext_rom_R", "shoulder_abdadd_rom_R",
             "thoracic_ext_rom"]
 
 # distinguishable but not fluorescent
+# Thematic, by feature domain:
+#   joint kinematics   a cool ramp, dark blue -> blue -> blue-grey -> green
+#   spatial kinematics orange-red
+#   temporal kinematics neutral greys
+#   functional patterns ambers
 FEATURE_COLORS = {
-    "norm_jerk_R": "#c16c67",
-    "elbow_rom_R": "#679570",
-    "shoulder_flexext_rom_R": "#5f87b2",
-    "shoulder_abdadd_rom_R": "#e1aa6f",
-    "shoulder_girdle_rom_R": "#907ab0",
-    "neck_rotation_rom": "#64abb5",
-    "neck_flexext_rom": "#c086ae",
-    "thoracic_ext_rom": "#98a05f",
-    "workspace_R_m3": "#5c9891",
-    "vel_hand_R_mean": "#957c5f",
-    "trunk_comp_R": "#975757",
-    "pct_above_shoulder_R": "#4d5c84",
+    "norm_jerk_R": "#4f5359",
+    "elbow_rom_R": "#1d3c63",
+    "shoulder_flexext_rom_R": "#2f6ca3",
+    "shoulder_abdadd_rom_R": "#6ba3cc",
+    "shoulder_girdle_rom_R": "#88a6bd",
+    "neck_rotation_rom": "#97b78e",
+    "neck_flexext_rom": "#559a63",
+    "thoracic_ext_rom": "#256b38",
+    "workspace_R_m3": "#c9502e",
+    "vel_hand_R_mean": "#a09a92",
+    "trunk_comp_R": "#c08a1e",
+    "pct_above_shoulder_R": "#e3c04f",
 }
 
 # interpretation bands
