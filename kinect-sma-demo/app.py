@@ -16,8 +16,10 @@ import os
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 import kinematics as K
+import player as PLY
 import plotting as PL
 
 # =========================================================================
@@ -51,7 +53,6 @@ PATIENT_ID_MAP = {
 }
 
 DATA_DIR = "data"                           # bundled synthetic sessions
-REFRESH = 0.20                              # seconds between animation steps
 # =========================================================================
 
 USE_LOCAL = bool(LOCAL_DATA_DIR.strip())
@@ -186,6 +187,34 @@ def load_viewer(path):
                 meta=rec["meta"], qc=qc, keep=keep, blocks=blocks, n=n_full)
 
 
+@st.cache_data(max_entries=4, show_spinner=False)
+def session_charts(path, feat_key):
+    """The whole-session timeline and feature chart. Static, so they are drawn
+    once per session instead of once per animation frame."""
+    import io
+    V = load_viewer(path)
+    out = []
+    for fig in (PL.draw_timeline(V["stage"], V["mov"], V["meta"]["movements"],
+                                 V["flags"], V["meta"]["gestureFlags"],
+                                 frame=None, nbody=V["nbody"]),
+                PL.draw_features(V["traces"], list(feat_key), frame=None,
+                                 normalise=True)):
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+        out.append(buf.getvalue())
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+    return out
+
+
+@st.cache_data(max_entries=6, show_spinner=False)
+def window_payload(path, start, stop, feat_key):
+    V = load_viewer(path)
+    return PLY.pack_window(V["raw"], V["conf"], V["traces"], list(feat_key),
+                           start, stop, V["meta"]["joints"], V["cube"], K.FPS,
+                           V["stage"], V["mov"], V["meta"]["movements"])
+
+
 @st.cache_data(show_spinner="Computing session summaries…")
 def get_summary(path):
     rec = K.load_npz(path)
@@ -244,22 +273,12 @@ with st.sidebar:
                                "single feature, or features sharing a scale.")
 
     st.divider()
-    st.subheader("Playback")
-    speed = st.select_slider("Speed", options=[0.5, 1, 2, 4, 8], value=2,
-                             format_func=lambda v: f"{v}x real time")
-    loop = st.checkbox("Repeat", value=True)
-    zoom = st.checkbox("Zoom graph to a window around the cursor", value=False)
-    zoom_s = st.slider("Window (seconds)", 5, 120, 30, disabled=not zoom)
+    st.caption("Playback controls (play, speed, loop, scrub) sit inside the "
+               "player itself, in the Session viewer tab.")
 
 V = load_viewer(PATHS[name])
 N = V["n"]
 meta, qc = V["meta"], V["qc"]
-
-if "frame" not in st.session_state:
-    st.session_state.frame = 0
-if "playing" not in st.session_state:
-    st.session_state.playing = False
-st.session_state.frame = int(np.clip(st.session_state.frame, 0, N - 1))
 
 # =========================================================================
 # headline metrics
@@ -287,92 +306,58 @@ tab_view, tab_qc, tab_dist, tab_cmp = st.tabs(
 # =========================================================================
 with tab_view:
     blocks = V["blocks"]
-    c = st.columns([1.4, 1.4, 1, 1, 1, 3])
-    mov_choice = c[0].selectbox("Jump to movement", ["(any)"] + meta["movements"],
-                                label_visibility="collapsed")
+    total_s = N / K.FPS
+
+    c = st.columns([1.2, 1.3, 0.9, 0.9, 4])
+    win_s = c[0].selectbox("Window", [10, 20, 30, 60, 120], index=2,
+                           format_func=lambda v: f"{v} s")
+    mov_choice = c[1].selectbox("Jump to", ["(any)"] + meta["movements"])
+    max_start = max(0, int(total_s - win_s))
+
+    if "win_start" not in st.session_state:
+        st.session_state.win_start = 0
+    st.session_state.win_start = int(np.clip(st.session_state.win_start, 0, max_start))
 
     def _jump(direction):
-        f = st.session_state.frame
-        cand = [b for b in blocks if mov_choice in ("(any)", b[2])]
-        nxt = [b[0] for b in cand if b[0] > f + 2] if direction > 0 else \
-              [b[0] for b in cand if b[0] < f - 2]
+        cur = st.session_state.win_start * K.FPS
+        cand = sorted(b[0] for b in blocks if mov_choice in ("(any)", b[2]))
+        if direction > 0:
+            nxt = [f for f in cand if f > cur + K.FPS]
+        else:
+            nxt = [f for f in cand if f < cur - K.FPS]
         if nxt:
-            st.session_state.frame = nxt[0] if direction > 0 else nxt[-1]
+            tgt = nxt[0] if direction > 0 else nxt[-1]
+            st.session_state.win_start = int(np.clip(tgt / K.FPS - 2, 0, max_start))
 
-    if c[1].button("Previous block", use_container_width=True):
+    if c[2].button("Prev", use_container_width=True):
         _jump(-1)
-    if c[2].button("Next block", use_container_width=True):
+    if c[3].button("Next", use_container_width=True):
         _jump(+1)
 
-    def _rerun_app():
-        try:
-            st.rerun(scope="app")
-        except TypeError:
-            st.rerun()
+    start_s = st.slider("Window start (seconds into the recording)", 0, max_start,
+                        key="win_start")
+    a = int(start_s * K.FPS)
+    b = min(N, a + int(win_s * K.FPS))
 
-    _refresh = REFRESH if st.session_state.playing else None
-    _frag = getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None)
+    with st.spinner("Preparing window…"):
+        payload = window_payload(PATHS[name], a, b, tuple(selected))
+    components.html(PLY.html(payload), height=700, scrolling=False)
 
-    def viewer():
-        b = st.columns([1, 1, 1, 6])
-        if b[0].button("Pause" if st.session_state.playing else "Play",
-                       use_container_width=True, key="b_play", type="primary"):
-            st.session_state.playing = not st.session_state.playing
-            _rerun_app()
-        if b[1].button("Restart", use_container_width=True, key="b_restart"):
-            st.session_state.frame = 0
-            st.rerun()
-        if b[2].button("End", use_container_width=True, key="b_end"):
-            st.session_state.frame = N - 1
-            st.rerun()
+    st.markdown(
+        '<span class="cap">Playback runs entirely in the browser, so it is smooth '
+        "and costs no server round-trips. Space bar toggles play. Bones sit in the "
+        "background and joint markers in the foreground, with marker opacity "
+        "encoding the Kinect tracking-confidence level (Medium 0.6, Low 0.25). "
+        "The two thin ribbons under the feature panel are the game phase and the "
+        "movement block.</span>", unsafe_allow_html=True)
 
-        if st.session_state.playing:
-            nxt = st.session_state.frame + max(1, int(round(speed * K.FPS * REFRESH)))
-            if nxt >= N:
-                if loop:
-                    nxt = 0
-                else:
-                    nxt, st.session_state.playing = N - 1, False
-            st.session_state.frame = int(nxt)
-
-        frame = st.slider("Frame", 0, N - 1, key="frame")
-        t = frame / K.FPS
-        stg = K.STAGE_NAMES.get(int(V["stage"][frame]), "?")
-        mv = int(V["mov"][frame])
-        mv = meta["movements"][mv] if mv >= 0 else "-"
-        warn = " · SECOND BODY IN FRAME" if V["nbody"][frame] != 1 else ""
-        st.markdown(
-            f'<span class="cap">t = {int(t // 60):02d}:{t % 60:05.2f} &nbsp;|&nbsp; '
-            f'phase <b>{stg}</b> &nbsp;|&nbsp; movement <b>{mv}</b>'
-            f'{"&nbsp;|&nbsp; <b style=color:#a32020>" + warn + "</b>" if warn else ""}'
-            "</span>", unsafe_allow_html=True)
-
-        st.pyplot(PL.draw_skeleton(V["raw"][frame], V["conf"][frame], V["cube"],
-                                   meta["joints"],
-                                   f"{name}  |  frame {frame + 1:,} / {N:,}"),
-                  clear_figure=True)
-        st.markdown(
-            '<span class="cap">Bones are drawn in the background and joint markers '
-            "in the foreground. Marker opacity encodes the Kinect tracking-confidence "
-            "level (Medium 0.6, Low 0.25). Only Medium-confidence joints enter the "
-            "feature computation.</span>", unsafe_allow_html=True)
-
-        st.markdown("##### Session timeline")
-        st.pyplot(PL.draw_timeline(V["stage"], V["mov"], meta["movements"],
-                                   V["flags"], meta["gestureFlags"], frame,
-                                   V["nbody"]), clear_figure=True)
-
-        st.markdown("##### Kinematic features over time")
-        win = None
-        if zoom:
-            h = int(zoom_s * K.FPS / 2)
-            win = (max(0, frame - h), min(N, frame + h))
-        st.pyplot(PL.draw_features(V["traces"], selected, frame, normalise,
-                                   window=win), clear_figure=True)
-
-    if _frag is not None:
-        viewer = _frag(run_every=_refresh)(viewer)
-    viewer()
+    st.divider()
+    st.markdown("##### Whole session")
+    st.markdown(f'<span class="cap">The shaded band marks the {win_s} s window '
+                "loaded into the player above.</span>", unsafe_allow_html=True)
+    tl_png, ft_png = session_charts(PATHS[name], tuple(selected))
+    st.image(tl_png, use_container_width=True)
+    st.image(ft_png, use_container_width=True)
 
     if selected:
         st.markdown('<span class="cap">Traces shown: ' + " &nbsp;·&nbsp; ".join(
