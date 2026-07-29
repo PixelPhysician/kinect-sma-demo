@@ -225,8 +225,9 @@ def session_charts(path, feat_key, normalise=True):
 
 @st.cache_data(max_entries=4, show_spinner=False)
 def feature_panels(path, feat_key):
-    """One isolated panel per selected feature, in raw units, stacked on the
-    same frame axis as the two charts above."""
+    """One isolated panel per feature, in raw units, stacked on the same frame
+    axis as the two combined charts. Called with the full twelve, so the cache
+    key is constant per session and the stack is drawn once."""
     import io
     import matplotlib.pyplot as plt
     V = load_viewer(path)
@@ -380,6 +381,12 @@ with _tabs["Session viewer"]:
 
     # ---- which features to overlay --------------------------------------
     st.markdown("##### Kinematic features")
+    st.markdown('<span class="cap">Pick any combination. The selection drives '
+                "the two combined graphs — the overlay under the player and the "
+                "all-together graph of the whole recording — while every feature "
+                "is always shown on its own further down.</span>",
+                unsafe_allow_html=True)
+    st.markdown('<div style="height:.4rem"></div>', unsafe_allow_html=True)
     if "feat_sel" not in st.session_state:
         st.session_state["feat_sel"] = ["shoulder_flexext_rom_R", "elbow_rom_R",
                                         "trunk_comp_R"]
@@ -425,17 +432,13 @@ with _tabs["Session viewer"]:
     st.image(ft_png, use_container_width=True)
 
     st.markdown('<hr class="soft">', unsafe_allow_html=True)
-    hc = st.columns([5, 2.2])
-    hc[0].markdown("**Each feature on its own**")
-    with hc[1]:
-        st.markdown('<div style="height:.15rem"></div>', unsafe_allow_html=True)
-        per_feature = st.toggle("Show individual panels", value=True)
-    if per_feature:
-        st.markdown('<span class="cap">One panel per selected feature, each in '
-                    "its own raw units on the same frame axis. Gaps are frames "
-                    "the pipeline discards.</span>", unsafe_allow_html=True)
-        st.image(feature_panels(PATHS[name], tuple(selected)),
-                 use_container_width=True)
+    st.markdown("**Each feature on its own**")
+    st.markdown('<span class="cap">All twelve features, one panel each, in raw '
+                "units on the same frame axis. This block ignores the selection "
+                "above, which governs the combined graphs only. Gaps are frames "
+                "the pipeline discards.</span>", unsafe_allow_html=True)
+    st.image(feature_panels(PATHS[name], tuple(K.TARGET_12_FEATURES)),
+             use_container_width=True)
 
     st.markdown('<hr class="soft">', unsafe_allow_html=True)
     st.markdown("**Game phase and completed repetitions**")
