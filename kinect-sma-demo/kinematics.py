@@ -161,19 +161,26 @@ ROM_LIKE = ["elbow_rom_R", "shoulder_flexext_rom_R", "shoulder_abdadd_rom_R",
 #   spatial kinematics orange-red
 #   temporal kinematics neutral greys
 #   functional patterns ambers
+# "Ocean Sunset": #001219 #005F73 #0A9396 #94D2BD #E9D8A6 #EE9B00 #CA6702
+#                #BB3E03 #AE2012 #9B2226
+#   joint kinematics    the four cool anchors, interpolated to seven steps
+#                       running axial -> proximal -> distal
+#   spatial kinematics  the sand, darkened for legibility on white
+#   temporal kinematics the reds
+#   functional patterns the oranges
 FEATURE_COLORS = {
-    "norm_jerk_R": "#3f4653",
-    "elbow_rom_R": "#17365e",
-    "shoulder_flexext_rom_R": "#1f5f9c",
-    "shoulder_abdadd_rom_R": "#2f8fbf",
-    "shoulder_girdle_rom_R": "#3fb0ad",
-    "neck_rotation_rom": "#52b98a",
-    "neck_flexext_rom": "#4f9e5a",
-    "thoracic_ext_rom": "#2f7038",
-    "workspace_R_m3": "#d94f36",
-    "vel_hand_R_mean": "#949cab",
-    "trunk_comp_R": "#b8721a",
-    "pct_above_shoulder_R": "#d4b23a",
+    "norm_jerk_R": "#9B2226",
+    "elbow_rom_R": "#5bb8ad",
+    "shoulder_flexext_rom_R": "#249f9d",
+    "shoulder_abdadd_rom_R": "#08878e",
+    "shoulder_girdle_rom_R": "#047380",
+    "neck_rotation_rom": "#005d71",
+    "neck_flexext_rom": "#003e4d",
+    "thoracic_ext_rom": "#002029",
+    "workspace_R_m3": "#C4A75F",
+    "vel_hand_R_mean": "#AE2012",
+    "trunk_comp_R": "#CA6702",
+    "pct_above_shoulder_R": "#EE9B00",
 }
 
 # interpretation bands
