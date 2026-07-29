@@ -51,10 +51,16 @@ MOVEMENT_NAMES = {
     "HR": "Head rotation (sequential, ~45 deg then neutral)",
     "TE": "Thoracic extension (sequential, ~190 deg then neutral)",
     "OC": "Hand open / close (sequential, 30-90 then 100-180 deg)",
-    "REACH": "Lateral reaching",
+    "REACH": "In-game nonspecific reaching (not a scored gesture)",
 }
-MOVEMENT_COLORS = {"EF": "#e6194b", "HA": "#4363d8", "HR": "#42d4f4",
-                   "TE": "#3cb44b", "OC": "#f58231", "REACH": "#911eb4"}
+
+# EF, HA, HR, TE and OC are the gesture identifiers the game logs and scores.
+# Reaching is not one of them: it is ordinary in-game arm movement between the
+# scored gestures, so it is spelled out rather than abbreviated.
+MOVEMENT_LABELS = {"EF": "EF", "HA": "HA", "HR": "HR", "TE": "TE", "OC": "OC",
+                   "REACH": "in-game reaching"}
+# muted so a long ribbon of movement blocks stays readable
+MOVEMENT_COLORS = {"EF": "#d4969a", "HA": "#839cb7", "HR": "#a2bec7", "TE": "#97ae99", "OC": "#e4c199", "REACH": "#b0a4b9"}
 
 SKELETON_EDGES = [
     ("Pelvis", "SpineNavel"), ("SpineNavel", "SpineChest"), ("SpineChest", "Neck"),
@@ -147,13 +153,20 @@ ROM_LIKE = ["elbow_rom_R", "shoulder_flexext_rom_R", "shoulder_abdadd_rom_R",
             "shoulder_girdle_rom_R", "neck_rotation_rom", "neck_flexext_rom",
             "thoracic_ext_rom"]
 
+# distinguishable but not fluorescent
 FEATURE_COLORS = {
-    "norm_jerk_R": "#e6194b", "elbow_rom_R": "#3cb44b",
-    "shoulder_flexext_rom_R": "#4363d8", "shoulder_abdadd_rom_R": "#f58231",
-    "shoulder_girdle_rom_R": "#911eb4", "neck_rotation_rom": "#1fa2b8",
-    "neck_flexext_rom": "#f032e6", "thoracic_ext_rom": "#8a9b0f",
-    "workspace_R_m3": "#469990", "vel_hand_R_mean": "#9A6324",
-    "trunk_comp_R": "#800000", "pct_above_shoulder_R": "#000075",
+    "norm_jerk_R": "#c16c67",
+    "elbow_rom_R": "#679570",
+    "shoulder_flexext_rom_R": "#5f87b2",
+    "shoulder_abdadd_rom_R": "#e1aa6f",
+    "shoulder_girdle_rom_R": "#907ab0",
+    "neck_rotation_rom": "#64abb5",
+    "neck_flexext_rom": "#c086ae",
+    "thoracic_ext_rom": "#98a05f",
+    "workspace_R_m3": "#5c9891",
+    "vel_hand_R_mean": "#957c5f",
+    "trunk_comp_R": "#975757",
+    "pct_above_shoulder_R": "#4d5c84",
 }
 
 # interpretation bands
