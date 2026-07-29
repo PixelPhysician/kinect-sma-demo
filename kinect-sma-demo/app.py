@@ -358,205 +358,58 @@ _names.append("Feature distributions")
 if SHOW_CROSS_SESSION:
     _names.append("Cross-session comparison")
 _tabs = dict(zip(_names, st.tabs(_names)))
-tab_view = _tabs["Session viewer"]
-tab_dist = _tabs["Feature distributions"]
-# hidden tabs still execute, into a container that is never rendered
-tab_qc = _tabs.get("Quality control", st.container())
-tab_cmp = _tabs.get("Cross-session comparison", st.container())
 
 # =========================================================================
-# TAB 1 - viewer
+# TAB - session viewer
 # =========================================================================
-with tab_view:
-    blocks = V["blocks"]
-    total_s = N / K.FPS
+with _tabs["Session viewer"]:
 
-    view_col, feat_col = st.columns([4.1, 1.25], gap="medium")
-
-    # ---- feature picker, beside the viewer rather than in the sidebar ----
-    with feat_col:
-        st.markdown("**Kinematic features**")
-        if "feat_sel" not in st.session_state:
-            st.session_state["feat_sel"] = ["shoulder_flexext_rom_R",
-                                            "elbow_rom_R", "trunk_comp_R"]
-        ba, bb = st.columns(2)
-        if ba.button("All 12", use_container_width=True):
+    # ---- which features to overlay --------------------------------------
+    st.markdown("##### Kinematic features")
+    if "feat_sel" not in st.session_state:
+        st.session_state["feat_sel"] = ["shoulder_flexext_rom_R", "elbow_rom_R",
+                                        "trunk_comp_R"]
+    fc = st.columns([5, 0.75, 0.75, 1.6])
+    with fc[1]:
+        st.markdown('<div style="height:.35rem"></div>', unsafe_allow_html=True)
+        if st.button("All 12", use_container_width=True):
             st.session_state["feat_sel"] = list(K.TARGET_12_FEATURES)
-        if bb.button("Clear", use_container_width=True):
+    with fc[2]:
+        st.markdown('<div style="height:.35rem"></div>', unsafe_allow_html=True)
+        if st.button("Clear", use_container_width=True):
             st.session_state["feat_sel"] = []
-        selected = st.multiselect(
-            "Overlay on the graph", K.TARGET_12_FEATURES, key="feat_sel",
-            format_func=lambda k: K.FEATURE_DISPLAY_NAMES[k],
-            label_visibility="collapsed")
-        normalise = st.toggle("Normalise to 0-1", value=True,
-                              help="Puts every selected feature on a shared "
-                                   "0-1 axis so their shapes can be compared. "
-                                   "Turn it off to read raw units, which is "
-                                   "only useful for a single feature.")
-        st.markdown('<span class="cap">The panel inside the player shows these '
-                    "features across the loaded window; the chart further down "
-                    "shows them across the whole recording.</span>",
-                    unsafe_allow_html=True)
+    selected = fc[0].multiselect(
+        "Overlay on the graph", K.TARGET_12_FEATURES, key="feat_sel",
+        format_func=lambda k: K.FEATURE_DISPLAY_NAMES[k],
+        label_visibility="collapsed")
+    with fc[3]:
+        st.markdown('<div style="height:.35rem"></div>', unsafe_allow_html=True)
+        normalise = st.toggle("Normalise to 0-1", value=True)
 
-    # ---- viewer: window controls, scrubber and player, kept together -----
-    with view_col:
-        WINDOWS = [("10 s", 10), ("20 s", 20), ("30 s", 30), ("1 min", 60),
-                   ("2 min", 120), ("5 min", 300), ("Full session", None)]
-        c = st.columns([1.25, 1.5, 0.85, 0.85])
-        win_lbl = c[0].selectbox("Zoom", [w[0] for w in WINDOWS], index=2)
-        win_s = dict(WINDOWS)[win_lbl]
-        mov_choice = c[1].selectbox("Jump to", ["(any)"] + meta["movements"])
-        full = win_s is None
-        max_start = 0 if full else max(0, int(total_s - win_s))
+    # ---- the player: the whole recording --------------------------------
+    with st.spinner("Preparing…"):
+        payload = window_payload(PATHS[name], 0, N, tuple(selected))
+    components.html(PLY.html(payload), height=700, scrolling=False)
 
-        if "win_start" not in st.session_state:
-            st.session_state.win_start = 0
-        st.session_state.win_start = int(
-            np.clip(st.session_state.win_start, 0, max_start))
-
-        LEAD_S = 2          # the window opens two seconds before the block starts
-
-        def _jump(direction):
-            # the reference point is the block we are sitting on, not the window
-            # edge, otherwise the same block is selected again every time
-            # the slider is whole seconds, so the reconstructed position can sit
-            # up to a second before the block it is anchored on: allow for that
-            cur = (st.session_state.win_start + LEAD_S) * K.FPS
-            tol = K.FPS
-            cand = sorted(b[0] for b in blocks if mov_choice in ("(any)", b[2]))
-            nxt = ([f for f in cand if f > cur + tol] if direction > 0
-                   else [f for f in cand if f < cur - tol])
-            if nxt:
-                tgt = nxt[0] if direction > 0 else nxt[-1]
-                st.session_state.win_start = int(
-                    np.clip(tgt / K.FPS - LEAD_S, 0, max_start))
-
-        c[2].markdown('<div style="height:1.75rem"></div>', unsafe_allow_html=True)
-        c[3].markdown('<div style="height:1.75rem"></div>', unsafe_allow_html=True)
-        if c[2].button("Prev", use_container_width=True):
-            _jump(-1)
-        if c[3].button("Next", use_container_width=True):
-            _jump(+1)
-
-        if full:
-            a_i, b_i, start_s = 0, N, 0
-            st.markdown('<span class="cap">The whole recording is loaded. Frames '
-                        "are thinned so it fits in the browser; the counter still "
-                        "shows the true frame numbers.</span>",
-                        unsafe_allow_html=True)
-        else:
-            start_s = st.slider("Window start (seconds into the recording)",
-                                0, max(1, max_start), key="win_start")
-            a_i = int(start_s * K.FPS)
-            b_i = min(N, a_i + int(win_s * K.FPS))
-
-        with st.spinner("Preparing…"):
-            payload = window_payload(PATHS[name], a_i, b_i, tuple(selected))
-        components.html(PLY.html(payload), height=700, scrolling=False)
-
-        # say plainly where the jump landed: with a long window the start can
-        # move a long way without the picture changing much
-        if not full and blocks:
-            def _ms(fr):
-                t = int(fr / K.FPS)
-                return f"{t // 60:d}:{t % 60:02d}"
-            inside, seen = [], []
-            for x in blocks:
-                if x[0] < b_i and x[1] > a_i:
-                    inside.append(x)
-                    if x[2] not in seen:
-                        seen.append(x[2])
-            nxt = next((x for x in blocks if x[0] >= a_i), None)
-            bits = [f"showing {_ms(a_i)} to {_ms(b_i)}"]
-            bits.append(f"{len(inside)} movement block(s) in view: " + ", ".join(seen)
-                        if inside else "no movement block in view")
-            if nxt is not None:
-                bits.append(f"next block {_ms(nxt[0])} ({nxt[2]}, "
-                            f"{blocks.index(nxt) + 1} of {len(blocks)})")
-            st.markdown('<span class="cap">' + " &nbsp;·&nbsp; ".join(bits)
-                        + "</span>", unsafe_allow_html=True)
-
-        if selected:
-            st.markdown('<span class="cap">Traces shown: '
-                        + " &nbsp;·&nbsp; ".join(
-                            f"<b>{K.FEATURE_DISPLAY_NAMES[k]}</b> - "
-                            f"{K.TRACE_MEANING[k]}" for k in selected)
-                        + "</span>", unsafe_allow_html=True)
-
-    st.divider()
-    st.markdown("##### Whole recording")
-    st.markdown(f'<span class="cap">The shaded band marks the {win_s} s window '
-                "loaded into the player above.</span>", unsafe_allow_html=True)
-    tl_png, ft_png = session_charts(PATHS[name], tuple(selected))
-    st.image(tl_png, use_container_width=True)
-    st.image(ft_png, use_container_width=True)
+    if selected:
+        st.markdown('<span class="cap">Traces shown: ' + " &nbsp;·&nbsp; ".join(
+            f"<b>{K.FEATURE_DISPLAY_NAMES[k]}</b> - {K.TRACE_MEANING[k]}"
+            for k in selected) + "</span>", unsafe_allow_html=True)
 
     with st.expander("All 32 tracked joints, and how the skeleton is drawn"):
         st.markdown(joint_legend_html(), unsafe_allow_html=True)
 
-# =========================================================================
-# TAB 2 - quality control
-# =========================================================================
-with tab_qc:
-    st.markdown("#### Session retention filters")
-    st.markdown(
-        '<span class="cap">A recording is carried into the analysis only if it '
-        "passes all three checks. They are applied to the whole file, before any "
-        "frame-level or joint-level filtering.</span>", unsafe_allow_html=True)
-    rows = [{"Check": c[0], "Observed": c[1], "Requirement": c[2],
-             "Result": "pass" if c[3] else "FAIL"} for c in qc["checks"]]
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-
-    if qc["retained"]:
-        st.success(f"{name} is retained for analysis.", icon="✅")
-    else:
-        failed = [c[0] for c in qc["checks"] if not c[3]]
-        st.error(f"{name} is excluded. Failed: {', '.join(failed)}.", icon="🚫")
-
-    left, right = st.columns([1.1, 1])
-    with left:
-        st.markdown("##### Game phase composition")
-        st.pyplot(PL.draw_stage_breakdown(qc["counts"], qc["n_frames"]),
-                  clear_figure=True)
-    with right:
-        st.markdown("##### Frame-level filtering")
-        kept = len(V["keep"])
-        st.metric("Frames entering feature computation", f"{kept:,}",
-                  f"{kept - qc['n_frames']:,} vs. recorded")
-        st.markdown(
-            '<span class="cap">Frames are kept only where the sensor reported '
-            "exactly one body and the game was in the gameplay phase. Within the "
-            "surviving frames, individual joints below Medium tracking confidence "
-            "are set to missing, short gaps up to five frames are interpolated, the "
-            "signal is low-pass filtered with a 4th-order zero-phase Butterworth at "
-            "5 Hz, and samples implying a velocity above 3 m/s are rejected as "
-            "tracking glitches.</span>", unsafe_allow_html=True)
-
-    if qc["multi_body_pct"] > 0:
-        st.warning(
-            f"A second person is present in {qc['multi_body_pct']:.1f} % of frames. "
-            "During that stretch body tracking follows the wrong person: the "
-            "skeleton is taller, further from the camera and translates across the "
-            "field of view. Those frames are visible in the viewer but are dropped "
-            "before any feature is computed.", icon="⚠️")
-
-    st.markdown("##### Movement protocol")
-    prot = pd.DataFrame(
-        [{"Code": k, "Movement": v,
-          "Type": "sequential" if k in ("HR", "TE", "OC") else "continuous"}
-         for k, v in K.MOVEMENT_NAMES.items()])
-    st.dataframe(prot, hide_index=True, use_container_width=True)
+    st.divider()
+    st.markdown("##### Whole recording")
+    tl_png, ft_png = session_charts(PATHS[name], tuple(selected))
+    st.image(ft_png, use_container_width=True)
+    st.image(tl_png, use_container_width=True)
 
 # =========================================================================
-# TAB 3 - distributions
+# TAB - feature distributions
 # =========================================================================
-with tab_dist:
-    st.markdown(f"#### Per-session feature distributions — {name}")
-    st.markdown(
-        '<span class="cap">Each of the twelve features is summarised by its '
-        "median, mean, standard deviation, selected percentiles, skewness and "
-        "kurtosis, together with a range-based descriptor (maximum minus minimum) "
-        "for the angular and excursion features.</span>", unsafe_allow_html=True)
+with _tabs["Feature distributions"]:
+    st.markdown(f"##### Per-session feature distributions — {name}")
     S = get_summary(PATHS[name])
     df = pd.DataFrame(S["dist"])
     st.dataframe(df.style.format(precision=3, na_rep="-"), hide_index=True,
@@ -567,64 +420,95 @@ with tab_dist:
                        mime="text/csv")
 
 # =========================================================================
-# TAB 4 - cross-session comparison
+# TAB - quality control  (built, hidden by default)
 # =========================================================================
-with tab_cmp:
-    st.markdown("#### Session-level feature values")
-    st.markdown(
-        '<span class="cap">Angular and excursion features are reported as maximum '
-        "minus minimum; workspace volume as the convex-hull volume of the whole "
-        "hand path; trunk compensation as total trunk path divided by total hand "
-        "path; hand speed and log dimensionless jerk over the full trajectory.</span>",
-        unsafe_allow_html=True)
+if SHOW_QUALITY_CONTROL:
+    with _tabs["Quality control"]:
+        st.markdown("#### Session retention filters")
+        rows = [{"Check": c[0], "Observed": c[1], "Requirement": c[2],
+                 "Result": "pass" if c[3] else "FAIL"} for c in qc["checks"]]
+        st.dataframe(pd.DataFrame(rows), hide_index=True,
+                     use_container_width=True)
+        if qc["retained"]:
+            st.success(f"{name} is retained for analysis.", icon="✅")
+        else:
+            failed = [c[0] for c in qc["checks"] if not c[3]]
+            st.error(f"{name} is excluded. Failed: {', '.join(failed)}.",
+                     icon="🚫")
 
-    order = list(SESSIONS)
-    sums = {s: get_summary(PATHS[s])["scalars"] for s in order}
-    tab = pd.DataFrame(
-        {s: {K.FEATURE_DISPLAY_NAMES[k]: sums[s][k] for k in K.TARGET_12_FEATURES}
-         for s in order})
-    tab.insert(0, "Domain", [K.FEATURE_DOMAIN[k] for k in K.TARGET_12_FEATURES])
-    st.dataframe(tab.style.format(precision=3, na_rep="-", subset=order),
-                 use_container_width=True)
+        left, right = st.columns([1.1, 1])
+        with left:
+            st.markdown("##### Game phase composition")
+            st.pyplot(PL.draw_stage_breakdown(qc["counts"], qc["n_frames"]),
+                      clear_figure=True)
+        with right:
+            st.markdown("##### Frame-level filtering")
+            kept = len(V["keep"])
+            st.metric("Frames entering feature computation", f"{kept:,}",
+                      f"{kept - qc['n_frames']:,} vs. recorded")
 
-    st.markdown("#### Test-retest stability within a participant")
-    st.markdown(
-        '<span class="cap">Coefficient of variation across the two sessions of the '
-        "same participant, classified as highly stable below 15 %, moderately "
-        "stable from 15 to 30 %, and unstable above 30 %. With two sessions per "
-        "participant this is illustrative only; an intraclass correlation "
-        "coefficient needs the full cohort.</span>", unsafe_allow_html=True)
-    pairs = {}
-    for s in order:
-        stem = s.rsplit("_", 1)[0] if "_" in s else s
-        pairs.setdefault(stem, []).append(s)
-    pairs = {k: v for k, v in pairs.items() if len(v) == 2}
-    if not pairs:
-        st.caption("Needs two sessions sharing a name stem, for example "
-                   "`P01_S1` and `P01_S2`.")
-    else:
-        cv_rows = []
-        for k in K.TARGET_12_FEATURES:
-            r = {"Feature": K.FEATURE_DISPLAY_NAMES[k]}
-            for stem, (a, b) in pairs.items():
-                v = K.cv_percent(sums[a][k], sums[b][k])
-                r[f"{stem} CV %"] = v
-                r[f"{stem} stability"] = K.band(v, K.CV_BANDS)
-            cv_rows.append(r)
-        st.dataframe(pd.DataFrame(cv_rows).style.format(precision=2, na_rep="-"),
-                     hide_index=True, use_container_width=True)
+        if qc["multi_body_pct"] > 0:
+            st.warning(
+                f"A second person is present in {qc['multi_body_pct']:.1f} % of "
+                "frames. During that stretch body tracking follows the wrong "
+                "person. Those frames are visible in the viewer but are dropped "
+                "before any feature is computed.", icon="⚠️")
 
-    st.markdown("#### Feature-by-feature")
-    feat = st.selectbox("Feature", K.TARGET_12_FEATURES,
-                        format_func=lambda k: K.FEATURE_DISPLAY_NAMES[k])
-    st.pyplot(PL.draw_comparison(sums, feat, order), clear_figure=True)
+        st.markdown("##### Movement protocol")
+        st.dataframe(pd.DataFrame(
+            [{"Code": k, "Movement": v,
+              "Type": "sequential" if k in ("HR", "TE", "OC") else "continuous"}
+             for k, v in K.MOVEMENT_NAMES.items()]),
+            hide_index=True, use_container_width=True)
 
+# =========================================================================
+# TAB - cross-session comparison  (built, hidden by default)
+# =========================================================================
+if SHOW_CROSS_SESSION:
+    with _tabs["Cross-session comparison"]:
+        st.markdown("#### Session-level feature values")
+        order = list(SESSIONS)
+        sums = {s: get_summary(PATHS[s])["scalars"] for s in order}
+        tab = pd.DataFrame(
+            {s: {K.FEATURE_DISPLAY_NAMES[k]: sums[s][k]
+                 for k in K.TARGET_12_FEATURES} for s in order})
+        tab.insert(0, "Domain",
+                   [K.FEATURE_DOMAIN[k] for k in K.TARGET_12_FEATURES])
+        st.dataframe(tab.style.format(precision=3, na_rep="-", subset=order),
+                     use_container_width=True)
+
+        st.markdown("#### Test-retest stability within a participant")
+        pairs = {}
+        for s in order:
+            pairs.setdefault(s.rsplit("_", 1)[0] if "_" in s else s, []).append(s)
+        pairs = {k: v for k, v in pairs.items() if len(v) == 2}
+        if not pairs:
+            st.caption("Needs two sessions sharing a name stem.")
+        else:
+            cv_rows = []
+            for k in K.TARGET_12_FEATURES:
+                r = {"Feature": K.FEATURE_DISPLAY_NAMES[k]}
+                for stem, (x, y) in pairs.items():
+                    v = K.cv_percent(sums[x][k], sums[y][k])
+                    r[f"{stem} CV %"] = v
+                    r[f"{stem} stability"] = K.band(v, K.CV_BANDS)
+                cv_rows.append(r)
+            st.dataframe(pd.DataFrame(cv_rows).style.format(precision=2,
+                                                            na_rep="-"),
+                         hide_index=True, use_container_width=True)
+
+        st.markdown("#### Feature-by-feature")
+        feat = st.selectbox("Feature", K.TARGET_12_FEATURES,
+                            format_func=lambda k: K.FEATURE_DISPLAY_NAMES[k])
+        st.pyplot(PL.draw_comparison(sums, feat, order), clear_figure=True)
+
+# =========================================================================
 with st.expander("Notes, definitions and caveats"):
     st.markdown("""
 **Coordinate handling.** Raw Kinect positions are in millimetres with *+y pointing
 down*. On load they are divided by 1000 and *y* is negated, so in every computation
 and plot **+y is up**. The three panels show front *(x, -y)*, side *(z, -y)* and
-top *(x, z)* on a shared cubic axis range, so proportions are preserved.
+top *(x, z)* in metres, on a shared cubic axis range, so proportions are preserved.
 
 **Movement protocol.** From the neutral resting position (sitting upright, arms
 relaxed on the thighs) the game requests elbow flexion (continuous, 30-100 deg),
@@ -636,39 +520,29 @@ fist 30-90 deg then opening 100-180 deg), plus lateral reaching. The synthetic
 participants attempt the same protocol; the weaker profile achieves a smaller
 fraction of it and compensates with the trunk.
 
-**Traces vs. scalars.** The animated curves are instantaneous, rolling or cumulative
-versions of the features so they can be watched frame by frame. Log dimensionless
-jerk and the trunk compensation ratio use a 4-second sliding window; workspace
-volume and % time above shoulder accumulate from the start of the session. The
-comparison tab reports the session-level scalars instead.
+**Traces vs. scalars.** The animated curves are instantaneous, rolling or
+cumulative versions of the features so they can be watched frame by frame. Log
+dimensionless jerk and the trunk compensation ratio use a 4-second sliding window;
+workspace volume and % time above shoulder accumulate from the start of the
+session. The distributions tab reports the session-level scalars instead.
+
+**Gaps in the traces.** A trace goes blank wherever a frame was removed by the
+frame-level filter: anything outside the gameplay phase, or any frame where the
+sensor reported more than one body. Nothing is interpolated across those
+stretches, and the player shades them grey so a blank stretch reads as excluded
+rather than missing.
+
+**Playback.** The whole recording is loaded. Frames are thinned by an integer step
+so a twenty-minute session fits in the browser, while the clock and the frame
+counter still refer to the true frame numbers of the original file. Speed runs
+from 0.25x to 10x real time, default 2x, with an optional repeat. The space bar
+toggles play, the arrow buttons step one frame, and dragging the scrubber pauses
+first. Playback is drawn in the browser, so it costs no server round-trips.
 
 **Interpretation.** More negative log dimensionless jerk means a less smooth
 movement. A higher trunk compensation ratio means more trunk displacement per unit
 of hand displacement, that is, the reach is being achieved by moving the body
 rather than the arm.
-
-**Gaps in the traces.** A trace goes blank wherever a frame was removed by the
-frame-level filter: anything outside the gameplay phase, or any frame where the
-sensor reported more than one body. Nothing is interpolated across those stretches,
-and the player shades them grey so a blank stretch reads as excluded rather than
-missing.
-
-**Reading the player.** Bones are drawn in the background and joint markers in the
-foreground, with marker opacity encoding the Kinect tracking-confidence level
-(Medium 0.6, Low 0.25). Only Medium-confidence joints enter the feature
-computation. The two thin ribbons beneath the feature panel are the game phase and
-the movement block. Playback is drawn in the browser, so it costs no server
-round-trips.
-
-**Long spans.** Windows up to two minutes play every recorded frame. Longer spans,
-including the whole recording, are thinned by an integer step so the data still
-fits in the browser: a 23-minute session loads as about 5,000 frames, one in eight.
-The clock and the frame counter always refer to the true frame numbers of the
-original recording, and the readout states how much thinning is in effect.
-
-**Playback.** Speed runs from 0.25x to 10x real time, default 2x, with an optional
-repeat. The space bar toggles play, the arrow buttons step one frame, Restart
-returns to the top of the span, and dragging the scrubber pauses first.
 
 **Files.** Each session also exists as `<name>.json.gz`, the complete recording in
 the original schema, and `<name>_excerpt.json`, a short pretty-printed excerpt. An
