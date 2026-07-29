@@ -102,10 +102,21 @@ ANGLE_JOINTS = ["ShoulderRight", "ShoulderLeft", "ElbowRight", "ElbowLeft",
 # =========================================================================
 # the 12 canonical features
 # =========================================================================
+#  Display and reporting order, which is also the order the panels, the legend
+#  and the distribution table come out in. Grouped by domain, and within the
+#  joint-kinematics block the chain runs distal -> proximal -> axial:
+#
+#     joint kinematics   elbow, glenohumeral, scapulothoracic, trunk, neck
+#     spatial            workspace volume
+#     temporal           speed first, then the smoothness derived from it
+#     functional         compensation, then anti-gravity reach
+#
 TARGET_12_FEATURES = [
-    "norm_jerk_R", "elbow_rom_R", "shoulder_flexext_rom_R", "shoulder_abdadd_rom_R",
-    "shoulder_girdle_rom_R", "neck_rotation_rom", "neck_flexext_rom",
-    "thoracic_ext_rom", "workspace_R_m3", "vel_hand_R_mean",
+    "elbow_rom_R", "shoulder_flexext_rom_R", "shoulder_abdadd_rom_R",
+    "shoulder_girdle_rom_R", "thoracic_ext_rom", "neck_rotation_rom",
+    "neck_flexext_rom",
+    "workspace_R_m3",
+    "vel_hand_R_mean", "norm_jerk_R",
     "trunk_comp_R", "pct_above_shoulder_R",
 ]
 
@@ -168,17 +179,20 @@ ROM_LIKE = ["elbow_rom_R", "shoulder_flexext_rom_R", "shoulder_abdadd_rom_R",
 #   spatial kinematics  the sand, darkened for legibility on white
 #   temporal kinematics the reds
 #   functional patterns the oranges
+#  The joint block is a single teal ramp that darkens distal -> proximal ->
+#  axial, so the legend reads as an anatomical chain. If the order above ever
+#  changes, re-ramp these seven together or the gradient stops meaning anything.
 FEATURE_COLORS = {
-    "norm_jerk_R": "#9B2226",
     "elbow_rom_R": "#5bb8ad",
     "shoulder_flexext_rom_R": "#249f9d",
     "shoulder_abdadd_rom_R": "#08878e",
     "shoulder_girdle_rom_R": "#047380",
-    "neck_rotation_rom": "#005d71",
-    "neck_flexext_rom": "#003e4d",
-    "thoracic_ext_rom": "#002029",
+    "thoracic_ext_rom": "#005d71",
+    "neck_rotation_rom": "#003e4d",
+    "neck_flexext_rom": "#002029",
     "workspace_R_m3": "#C4A75F",
     "vel_hand_R_mean": "#AE2012",
+    "norm_jerk_R": "#9B2226",
     "trunk_comp_R": "#CA6702",
     "pct_above_shoulder_R": "#EE9B00",
 }
