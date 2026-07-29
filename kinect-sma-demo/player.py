@@ -211,30 +211,39 @@ const VIEWS = [
 
 function draw(){
   sc.clearRect(0,0,W,PH);
-  const pad = 26, pw = W/3;
+  const pw = W/3, ML = 38, MR = 10, MT = 19, MB = 31;
   const base = frame*D.J*3;
 
   for (let v=0; v<3; v++){
     const V = VIEWS[v], ox = v*pw;
     const rx = D.cube[V.ax], ry = D.cube[V.ay];
-    const iw = pw - pad*1.35, ih = PH - pad*1.7;
-    const sx = iw/(rx[1]-rx[0]), sy = ih/(ry[1]-ry[0]);
-    const s = Math.min(sx, sy);                       // equal aspect
-    const cx = ox + pw/2, cy = PH/2 + 6;
+    const x0 = ox + ML, y0 = MT;
+    const iw = pw - ML - MR, ih = PH - MT - MB;
+    const s = Math.min(iw/(rx[1]-rx[0]), ih/(ry[1]-ry[0]));   // equal aspect
+    const cx = x0 + iw/2, cy = y0 + ih/2;
     const mx = (rx[0]+rx[1])/2, my = (ry[0]+ry[1])/2;
     const PX = u => cx + (u - mx)*s;
-    const PY = u => cy - (u - my)*s;                  // canvas y grows downward
+    const PY = u => cy - (u - my)*s;                          // canvas y grows down
 
-    sc.save();
-    sc.beginPath(); sc.rect(ox+2, 0, pw-4, PH); sc.clip();
-
-    // frame + grid
-    sc.strokeStyle='#e6eaef'; sc.lineWidth=1;
+    // grid and numbered ticks
+    sc.strokeStyle='#e8ecf1'; sc.lineWidth=1;
+    sc.fillStyle='#98a1ad'; sc.font='9px sans-serif';
     for (let g=0; g<=4; g++){
       const gx = rx[0]+(rx[1]-rx[0])*g/4, gy = ry[0]+(ry[1]-ry[0])*g/4;
-      sc.beginPath(); sc.moveTo(PX(gx), PY(ry[0])); sc.lineTo(PX(gx), PY(ry[1])); sc.stroke();
-      sc.beginPath(); sc.moveTo(PX(rx[0]), PY(gy)); sc.lineTo(PX(rx[1]), PY(gy)); sc.stroke();
+      sc.beginPath(); sc.moveTo(PX(gx), y0); sc.lineTo(PX(gx), y0+ih); sc.stroke();
+      sc.beginPath(); sc.moveTo(x0, PY(gy)); sc.lineTo(x0+iw, PY(gy)); sc.stroke();
+      sc.textAlign='center'; sc.textBaseline='top';
+      sc.fillText(gx.toFixed(1), PX(gx), y0+ih+4);
+      sc.textAlign='right'; sc.textBaseline='middle';
+      sc.fillText(gy.toFixed(1), x0-4, PY(gy));
     }
+    // axis spines
+    sc.strokeStyle='#c8cfd8'; sc.lineWidth=1;
+    sc.beginPath(); sc.moveTo(x0, y0); sc.lineTo(x0, y0+ih); sc.lineTo(x0+iw, y0+ih);
+    sc.stroke();
+
+    sc.save();
+    sc.beginPath(); sc.rect(x0, y0, iw, ih); sc.clip();
 
     const gxv = o => V.gx(o)/1000, gyv = o => V.gy(o)/1000;
     const P = j => {
@@ -242,8 +251,7 @@ function draw(){
       if (POS[k]===MISSING) return null;
       return [POS[k], POS[k+1], POS[k+2]];
     };
-
-    // bones first: they belong in the background
+    // bones first: background
     sc.lineCap='round'; sc.lineWidth=2.4;
     for (let b=0; b<D.bones.length; b++){
       const A = P(D.bones[b][0]), B = P(D.bones[b][1]);
@@ -254,7 +262,7 @@ function draw(){
       sc.lineTo(PX(gxv(B)), PY(gyv(B)));
       sc.stroke();
     }
-    // joints on top, opacity = tracking confidence
+    // joints on top: foreground, opacity = tracking confidence
     for (let j=0; j<D.J; j++){
       const A = P(j); if (!A) continue;
       sc.globalAlpha = ALPHA[CONF[frame*D.J + j]] ?? 0.25;
@@ -264,10 +272,16 @@ function draw(){
     sc.globalAlpha = 1;
     sc.restore();
 
-    sc.fillStyle='#1f2733'; sc.font='600 11px sans-serif'; sc.textAlign='center';
-    sc.fillText(V.t, ox+pw/2, 14);
-    sc.fillStyle='#98a1ad'; sc.font='9px sans-serif';
-    sc.fillText(V.xl, ox+pw/2, PH-4);
+    sc.fillStyle='#1f2733'; sc.font='600 11px sans-serif';
+    sc.textAlign='center'; sc.textBaseline='alphabetic';
+    sc.fillText(V.t, ox+pw/2, 13);
+    sc.fillStyle='#8a93a0'; sc.font='9px sans-serif';
+    sc.fillText(V.xl, x0+iw/2, PH-5);
+    sc.save();
+    sc.translate(ox+10, y0+ih/2); sc.rotate(-Math.PI/2);
+    sc.textAlign='center'; sc.textBaseline='middle';
+    sc.fillText(V.yl, 0, 0);
+    sc.restore();
   }
   drawCursor();
   updateReadout();
@@ -344,8 +358,7 @@ function updateReadout(){
   let mv = '';
   for (const b of D.mband) if (frame>=b.a && frame<b.b) mv = b.n;
   phase.textContent = 'frame ' + (trueFrame(frame)+1).toLocaleString()
-                    + (ph ? '  \u00b7  ' + ph : '') + (mv ? '  \u00b7  ' + mv : '')
-                    + (D.step > 1 ? '  \u00b7  every ' + D.step + 'th frame' : '');
+                    + (ph ? '  \u00b7  ' + ph : '') + (mv ? '  \u00b7  ' + mv : '');
   let h = '';
   for (let s2=0;s2<D.S;s2++){
     const raw = FEAT[frame*D.S + s2];
