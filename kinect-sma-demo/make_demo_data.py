@@ -130,12 +130,12 @@ PROFILES = {
 }
 
 SESSION_PLAN = [
-    # (name, profile, minutes, seed, faulty)
-    ("P01_S1", "P01", 18.6, 1101, False),
-    ("P01_S2", "P01", 21.0, 1102, False),
-    ("P02_S1", "P02", 17.8, 2201, False),
-    ("P02_S2", "P02", 22.8, 2202, False),
-    ("BAD_S1", "P01", 2.4, 9099, True),
+    # (name, profile, minutes, seed, faulty, mid-session returns to the room)
+    ("P01_S1", "P01", 18.6, 1101, False, 0),
+    ("P01_S2", "P01", 21.0, 1102, False, 1),   # this one child took a break
+    ("P02_S1", "P02", 17.8, 2201, False, 0),
+    ("P02_S2", "P02", 22.8, 2202, False, 0),
+    ("BAD_S1", "P01", 2.4, 9099, True, 0),
 ]
 
 
@@ -242,8 +242,12 @@ BLOCK_STYLES = [
 # =========================================================================
 # session schedule
 # =========================================================================
-def build_schedule(rng, minutes, faulty):
-    """Returns list of [stage_id, movement_or_None, side, n_frames]."""
+def build_schedule(rng, minutes, faulty, n_breaks=0):
+    """Returns list of [stage_id, movement_or_None, side, n_frames].
+
+    n_breaks is how many times the child leaves the alchemy workshop and goes
+    back to the room mid-session. Most recordings have none.
+    """
     blocks = []
 
     def add(stage, n_sec, mov=None, side="Undefined"):
@@ -263,32 +267,44 @@ def build_schedule(rng, minutes, faulty):
         return blocks
 
     # a well-formed session contains no Loading / Calibration / Settings /
-    # ChangePlayer frames at all, so it survives the retention filters
+    # ChangePlayer frames at all, so it survives the retention filters.
+    # The child works through the room once and then stays in the alchemy
+    # workshop: GameIntro -> MainMenu -> LarkRoom -> Alchemy -> LarkRoom,
+    # with at most one mid-session return to the room.
     add(1, rng.uniform(14, 22))                  # GameIntro
     add(2, rng.uniform(8, 16))                   # MainMenu
-    add(3, rng.uniform(20, 35))                  # LarkRoom
+    add(3, rng.uniform(22, 34))                  # LarkRoom, choosing a recipe
 
-    target = minutes * 60
+    tail = rng.uniform(16, 28)                   # LarkRoom again at the very end
+    target = minutes * 60 - tail
     used = sum(b[3] for b in blocks) / FPS
+
+    # where the optional mid-session breaks fall, as a fraction of the session
+    break_at = sorted(rng.uniform(0.35, 0.72, n_breaks)) if n_breaks else []
+    bi = 0
+
     # the game cycles through the whole movement set, so the composition of a
     # session is stable from one recording to the next
     cycle, ci = list(MOVEMENTS), 0
     rng.shuffle(cycle)
     while used < target - 20:
-        for _ in range(4):                           # one "potion"
-            mov = cycle[ci % len(cycle)]
-            ci += 1
-            if ci % len(cycle) == 0:
-                rng.shuffle(cycle)
-            side = "Undefined" if mov == "TE" else ("Right" if ci % 3 else "Left")
-            d = float(rng.uniform(20, 28))
-            add(7, d, mov, side)
-            add(7, float(rng.uniform(3, 6)))         # rest at neutral, still Alchemy
-            used += d + 4.5
-        d = float(rng.uniform(11, 15))
-        add(3, d)                                    # back to the room between potions
-        used += d
+        if bi < len(break_at) and used > (target * break_at[bi]):
+            d = float(rng.uniform(20, 32))
+            add(3, d)                            # one trip back to the room
+            used += d
+            bi += 1
+            continue
+        mov = cycle[ci % len(cycle)]
+        ci += 1
+        if ci % len(cycle) == 0:
+            rng.shuffle(cycle)
+        side = "Undefined" if mov == "TE" else ("Right" if ci % 3 else "Left")
+        d = float(rng.uniform(20, 28))
+        add(7, d, mov, side)
+        add(7, float(rng.uniform(3, 6)))         # rest at neutral, still Alchemy
+        used += d + 4.5
     add(7, max(5.0, target - used))
+    add(3, tail)                                 # back to the room, session ends
     return blocks
 
 
@@ -604,10 +620,10 @@ def compute_angle_channels(P, A):
 # =========================================================================
 # assemble one session
 # =========================================================================
-def make_session(name, prof_key, minutes, seed, faulty):
+def make_session(name, prof_key, minutes, seed, faulty, n_breaks=0):
     p = PROFILES[prof_key]
     rng = np.random.default_rng(seed)
-    blocks = build_schedule(rng, minutes, faulty)
+    blocks = build_schedule(rng, minutes, faulty, n_breaks)
     A, stage, mov_id, flags, N = angle_program(p, blocks, rng)
     P = build_positions(p, A, N, rng, seated=True)
 
@@ -751,10 +767,10 @@ def write_json_gz(rec, path):
 # =========================================================================
 def main(out_dir="data", npz_only=False, minutes=None, quiet=False):
     os.makedirs(out_dir, exist_ok=True)
-    for name, prof, mins, seed, faulty in SESSION_PLAN:
+    for name, prof, mins, seed, faulty, nb in SESSION_PLAN:
         if minutes is not None:
             mins = minutes if not faulty else max(0.6, minutes * 0.13)
-        rec = make_session(name, prof, mins, seed, faulty)
+        rec = make_session(name, prof, mins, seed, faulty, nb)
         npz = os.path.join(out_dir, name + ".npz")
         write_npz(rec, npz)
         msg = (f"{name}: {rec['P'].shape[0]:>6} frames "
