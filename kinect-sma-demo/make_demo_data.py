@@ -680,22 +680,32 @@ def write_npz(rec, path):
 
 
 def write_json_excerpt(rec, path, n_frames=40):
-    """A short, pretty-printed, uncompressed excerpt for inspection / an appendix."""
+    """A short, pretty-printed, uncompressed excerpt for inspection.
+
+    Built straight into memory: no temporary file, so nothing here can fail on a
+    read-only or unusual filesystem.
+    """
     import copy
+    import io
     small = copy.deepcopy(rec)
-    for k in ("P", "stage", "nbody", "bodyid", "conf", "flags", "ang", "mov", "intruder"):
+    for k in ("P", "stage", "nbody", "bodyid", "conf", "flags", "ang", "mov",
+              "intruder"):
         small[k] = rec[k][:n_frames]
-    tmp = path + ".gz"
-    write_json_gz(small, tmp)
-    with gzip.open(tmp, "rt") as f:
-        obj = json.load(f)
-    os.remove(tmp)
+    buf = io.StringIO()
+    _write_json_stream(small, buf)
+    obj = json.loads(buf.getvalue())
     with open(path, "w") as f:
         json.dump(obj, f, indent=2)
 
 
 def write_json_gz(rec, path):
     """Streams the full schema out frame by frame so memory stays flat."""
+    with gzip.open(path, "wt", compresslevel=6) as f:
+        _write_json_stream(rec, f)
+
+
+def _write_json_stream(rec, f):
+    """Writes the whole recording to an open text stream, frame by frame."""
     P, stage, nbody, bodyid = rec["P"], rec["stage"], rec["nbody"], rec["bodyid"]
     conf, flags, ang = rec["conf"], rec["flags"], rec["ang"]
     N = P.shape[0]
@@ -735,7 +745,7 @@ def write_json_gz(rec, path):
         ]]}
 
     jn = JOINTS_32
-    with gzip.open(path, "wt", compresslevel=6) as f:
+    if True:
         f.write(json.dumps(head)[:-1])
         f.write("," + json.dumps({"calibration": calib})[1:-1])
         f.write(',"frameData":[')
@@ -776,10 +786,10 @@ def main(out_dir="data", npz_only=False, minutes=None, quiet=False):
         msg = (f"{name}: {rec['P'].shape[0]:>6} frames "
                f"({rec['P'].shape[0] / FPS / 60:5.1f} min)  "
                f"npz {os.path.getsize(npz) / 1e6:5.1f} MB")
-        ex = os.path.join(out_dir, name + "_excerpt.json")
-        write_json_excerpt(rec, ex)
-        msg += f"  excerpt {os.path.getsize(ex) / 1e6:4.1f} MB"
         if not npz_only:
+            ex = os.path.join(out_dir, name + "_excerpt.json")
+            write_json_excerpt(rec, ex)
+            msg += f"  excerpt {os.path.getsize(ex) / 1e6:4.1f} MB"
             jz = os.path.join(out_dir, name + ".json.gz")
             write_json_gz(rec, jz)
             msg += f"  json.gz {os.path.getsize(jz) / 1e6:5.1f} MB"
