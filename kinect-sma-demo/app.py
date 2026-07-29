@@ -448,7 +448,7 @@ with tab_dist:
         "for the angular and excursion features.</span>", unsafe_allow_html=True)
     S = get_summary(PATHS[name])
     df = pd.DataFrame(S["dist"])
-    st.dataframe(df.style.format(precision=3), hide_index=True,
+    st.dataframe(df.style.format(precision=3, na_rep="-"), hide_index=True,
                  use_container_width=True)
     st.download_button("Download this table as CSV",
                        df.to_csv(index=False).encode(),
@@ -473,7 +473,7 @@ with tab_cmp:
         {s: {K.FEATURE_DISPLAY_NAMES[k]: sums[s][k] for k in K.TARGET_12_FEATURES}
          for s in order})
     tab.insert(0, "Domain", [K.FEATURE_DOMAIN[k] for k in K.TARGET_12_FEATURES])
-    st.dataframe(tab.style.format(precision=3, subset=order),
+    st.dataframe(tab.style.format(precision=3, na_rep="-", subset=order),
                  use_container_width=True)
 
     st.markdown("#### Test-retest stability within a participant")
