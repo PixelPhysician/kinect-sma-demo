@@ -88,8 +88,8 @@ def draw_skeleton(pos, conf, cube, joints, title="", show_labels=False):
 # =========================================================================
 # timeline: game phase ribbon + movement ribbon + completed-movement raster
 # =========================================================================
-def draw_timeline(stage, mov, movements, flags, flag_names, frame,
-                  nbody=None, height=3.0):
+def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
+                  nbody=None, height=3.0, window=None):
     n = len(stage)
     rows = 3 if flags is not None else 2
     fig, axes = plt.subplots(rows, 1, figsize=(13.2, height),
@@ -141,7 +141,12 @@ def draw_timeline(stage, mov, movements, flags, flag_names, frame,
         ax.grid(axis="x", alpha=0.2)
 
     for ax in axes:
-        ax.axvline(frame, color=INK, lw=1.3, zorder=6)
+        if window is not None:
+            ax.axvspan(window[0], window[1], facecolor="none", edgecolor=INK,
+                       lw=1.4, zorder=7)
+            ax.axvspan(window[0], window[1], color="#1f2733", alpha=0.10, zorder=6)
+        if frame is not None:
+            ax.axvline(frame, color=INK, lw=1.3, zorder=8)
         ax.set_xlim(0, n - 1)
         ax.tick_params(labelsize=7, colors=MUTED)
     axes[-1].set_xlabel("Frame", color=MUTED)
@@ -161,8 +166,8 @@ def draw_timeline(stage, mov, movements, flags, flag_names, frame,
 # =========================================================================
 # feature overlay
 # =========================================================================
-def draw_features(traces, selected, frame, normalise=True, max_points=2500,
-                  window=None):
+def draw_features(traces, selected, frame=None, normalise=True, max_points=2500,
+                  window=None, span=None):
     fig, ax = plt.subplots(figsize=(13.2, 4.0))
     if not selected:
         ax.text(0.5, 0.5, "Select one or more features in the sidebar",
@@ -183,12 +188,15 @@ def draw_features(traces, selected, frame, normalise=True, max_points=2500,
             a, b = np.nanmin(v), np.nanmax(v)
             seg = (seg - a) / (b - a) if np.isfinite(b - a) and b - a > 1e-12 \
                 else np.zeros_like(seg)
-        cur = v[min(frame, n - 1)]
-        lbl = (f"{K.FEATURE_DISPLAY_NAMES[key]} = {cur:.3f}"
-               if np.isfinite(cur) else f"{K.FEATURE_DISPLAY_NAMES[key]} = n/a")
+        if frame is None:
+            lbl = K.FEATURE_DISPLAY_NAMES[key]
+        else:
+            cur = v[min(frame, n - 1)]
+            lbl = (f"{K.FEATURE_DISPLAY_NAMES[key]} = {cur:.3f}"
+                   if np.isfinite(cur) else f"{K.FEATURE_DISPLAY_NAMES[key]} = n/a")
         c = K.FEATURE_COLORS[key]
         ax.plot(xs, seg, color=c, lw=1.15, alpha=0.9, label=lbl, zorder=2)
-        if lo <= frame < hi:
+        if frame is not None and lo <= frame < hi:
             yv = v[frame]
             if normalise and np.isfinite(yv):
                 a, b = np.nanmin(v), np.nanmax(v)
@@ -197,7 +205,10 @@ def draw_features(traces, selected, frame, normalise=True, max_points=2500,
                 ax.scatter([frame], [yv], s=44, color=c, zorder=5,
                            edgecolors="white", linewidths=0.9)
 
-    ax.axvline(frame, color=INK, lw=1.1, ls="--", alpha=0.85, zorder=4)
+    if frame is not None:
+        ax.axvline(frame, color=INK, lw=1.1, ls="--", alpha=0.85, zorder=4)
+    if span is not None:
+        ax.axvspan(span[0], span[1], color="#1f2733", alpha=0.10, zorder=1)
     ax.set_xlim(lo, hi - 1 if hi > lo else lo + 1)
     ax.set_xlabel("Frame (gameplay frames, 30 Hz)", color=MUTED)
     ax.set_ylabel("Normalised 0-1" if normalise else "Raw value", color=MUTED)
