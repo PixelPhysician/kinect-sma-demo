@@ -326,9 +326,6 @@ with st.sidebar:
         name = st.radio("Session", SESSIONS, index=0,
                         captions=[SESSION_CAPTIONS.get(s, "") for s in SESSIONS])
 
-    st.divider()
-    st.caption("Feature selection sits beside the viewer, and the playback "
-               "controls are inside the player itself.")
 
 V = load_viewer(PATHS[name])
 N = V["n"]
