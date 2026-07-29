@@ -89,11 +89,17 @@ def draw_skeleton(pos, conf, cube, joints, title="", show_labels=False):
 # timeline: game phase ribbon + movement ribbon + completed-movement raster
 # =========================================================================
 def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
-                  nbody=None, height=3.0, window=None):
+                  nbody=None, height=2.6, window=None):
+    """Game phase along the top, completed repetitions below.
+
+    `mov` is still accepted so callers do not change, but the movement-block
+    ribbon is no longer drawn: the completed-repetition raster carries the same
+    information and reads more cleanly over a twenty-minute recording.
+    """
     n = len(stage)
-    rows = 3 if flags is not None else 2
+    rows = 2 if flags is not None else 1
     fig, axes = plt.subplots(rows, 1, figsize=(13.2, height),
-                             gridspec_kw={"height_ratios": [1, 1, 2.4][:rows]},
+                             gridspec_kw={"height_ratios": [1, 2.6][:rows]},
                              sharex=True)
     axes = np.atleast_1d(axes)
 
@@ -111,20 +117,9 @@ def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
     ax.set_ylabel("Phase", rotation=0, ha="right", va="center", color=MUTED)
     ax.grid(False)
 
-    # --- movement block ---
-    ax = axes[1]
-    for a, b, m in K.stage_segments(mov.astype(np.int16)):
-        if m >= 0:
-            name = movements[m]
-            ax.axvspan(a, b, color=K.MOVEMENT_COLORS.get(name, "#999999"),
-                       alpha=0.85, lw=0)
-    ax.set_yticks([])
-    ax.set_ylabel("Movement", rotation=0, ha="right", va="center", color=MUTED)
-    ax.grid(False)
-
-    # --- completed-movement raster ---
+    # --- completed-repetition raster ---
     if flags is not None:
-        ax = axes[2]
+        ax = axes[1]
         for i, nm in enumerate(flag_names):
             v = flags[:, i].astype(bool)
             if not v.any():
@@ -154,7 +149,7 @@ def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
     handles = [mpatches.Patch(color=K.STAGE_COLORS[s], label=K.STAGE_NAMES[s])
                for s in sorted(set(int(v) for v in np.unique(stage)))]
     handles += [mpatches.Patch(color=K.MOVEMENT_COLORS[m], label=m)
-                for m in movements]
+                for m in movements if m in K.MOVEMENT_COLORS]
     if nbody is not None and (nbody != 1).any():
         handles.append(mpatches.Patch(color="#d62728", label="second body in frame"))
     axes[0].legend(handles=handles, ncol=8, fontsize=6.5,
@@ -213,7 +208,9 @@ def draw_features(traces, selected, frame=None, normalise=True, max_points=2500,
     ax.set_xlabel("Frame (gameplay frames, 30 Hz)", color=MUTED)
     ax.set_ylabel("Normalised 0-1" if normalise else "Raw value", color=MUTED)
     ax.tick_params(labelsize=7.5, colors=MUTED)
-    ax.legend(fontsize=7.5, loc="upper left", ncol=2)
+    ax.legend(fontsize=7.5, loc="lower left", bbox_to_anchor=(0, 1.005),
+              ncol=4, frameon=False, borderaxespad=0, columnspacing=1.6,
+              handlelength=1.6, handletextpad=0.5)
     fig.tight_layout()
     return fig
 
