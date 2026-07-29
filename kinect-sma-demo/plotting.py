@@ -240,6 +240,89 @@ def draw_features(traces, selected, frame=None, normalise=True, max_points=2500,
 
 
 # =========================================================================
+# one isolated panel per feature
+# =========================================================================
+def _unit_of(key):
+    """The unit carried in the display name, e.g. 'Elbow ROM (deg)' -> 'deg'."""
+    nm = K.FEATURE_DISPLAY_NAMES.get(key, key)
+    if "(" in nm and nm.rstrip().endswith(")"):
+        return nm[nm.rfind("(") + 1:-1]
+    return "value"
+
+
+def draw_feature_panels(traces, selected, frame=None, max_points=2500,
+                        window=None, panel_h=1.30, show_median=True):
+    """One panel per selected feature, isolated, in its own raw units.
+
+    Stacked on a shared frame axis and pinned to the same figure fractions as
+    draw_features and draw_timeline, so every chart on the page lines up frame
+    for frame. Titles are drawn inside the axes to keep the stack compact.
+    """
+    if not selected:
+        fig, ax = plt.subplots(figsize=(FIG_W, 1.1))
+        ax.text(0.5, 0.5, "Select one or more features above",
+                ha="center", va="center", color=MUTED, fontsize=11)
+        ax.set_axis_off()
+        fig.subplots_adjust(left=AX_LEFT, right=AX_RIGHT)
+        return fig
+
+    n = len(next(iter(traces.values())))
+    lo, hi = (0, n) if window is None else window
+    lo, hi = max(0, int(lo)), min(n, int(hi))
+    step = max(1, (hi - lo) // max_points)
+    xs = np.arange(lo, hi, step)
+
+    rows = len(selected)
+    fig, axes = plt.subplots(rows, 1, figsize=(FIG_W, 0.55 + panel_h * rows),
+                             sharex=True, squeeze=False)
+    axes = axes[:, 0]
+
+    for ax, key in zip(axes, selected):
+        v = np.asarray(traces[key], float)
+        seg = v[lo:hi:step]
+        c = K.FEATURE_COLORS[key]
+        ax.plot(xs, seg, color=c, lw=1.15, alpha=0.95, zorder=3)
+        ax.fill_between(xs, seg, np.nanmin(v), color=c, alpha=0.09, lw=0,
+                        zorder=2)
+
+        if show_median and np.isfinite(v).any():
+            med = float(np.nanmedian(v))
+            ax.axhline(med, color=MUTED, lw=0.9, ls=":", zorder=1)
+            # inside the axes, right aligned: the plotting area is pinned to the
+            # same figure fractions as the charts above, so there is no margin
+            # outside it to write into
+            ax.text(0.996, 0.94, f"median {med:.3g} {_unit_of(key)}",
+                    transform=ax.transAxes, ha="right", va="top",
+                    fontsize=7, color=MUTED, zorder=6)
+
+        ttl = f"{K.FEATURE_DISPLAY_NAMES[key]} over session"
+        if frame is not None:
+            cur = v[min(frame, n - 1)]
+            ttl += f"  ·  frame {frame:,} = " + (f"{cur:.3f}"
+                                                 if np.isfinite(cur) else "n/a")
+        ax.text(0.004, 0.94, ttl, transform=ax.transAxes, ha="left", va="top",
+                fontsize=8.5, fontweight="bold", color=INK, zorder=6)
+
+        if frame is not None and lo <= frame < hi:
+            ax.axvline(frame, color=INK, lw=1.0, ls="--", alpha=0.85, zorder=4)
+            yv = v[frame]
+            if np.isfinite(yv):
+                ax.scatter([frame], [yv], s=34, color=c, zorder=5,
+                           edgecolors="white", linewidths=0.9)
+
+        ax.set_ylabel(_unit_of(key), color=MUTED, fontsize=7.5)
+        ax.set_xlim(lo, hi - 1 if hi > lo else lo + 1)
+        ax.tick_params(labelsize=7, colors=MUTED)
+        ax.margins(y=0.22)
+
+    axes[-1].set_xlabel("Frame", color=MUTED)
+    fig.subplots_adjust(left=AX_LEFT, right=AX_RIGHT,
+                        top=1 - 0.30 / (0.55 + panel_h * rows),
+                        bottom=0.55 / (0.55 + panel_h * rows), hspace=0.28)
+    return fig
+
+
+# =========================================================================
 # phase composition
 # =========================================================================
 def draw_stage_breakdown(counts, total):
