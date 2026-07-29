@@ -251,12 +251,12 @@ def _unit_of(key):
 
 
 def draw_feature_panels(traces, selected, frame=None, max_points=2500,
-                        window=None, panel_h=1.30, show_median=True):
+                        window=None, panel_h=1.30, show_median=False):
     """One panel per selected feature, isolated, in its own raw units.
 
     Stacked on a shared frame axis and pinned to the same figure fractions as
     draw_features and draw_timeline, so every chart on the page lines up frame
-    for frame. Titles are drawn inside the axes to keep the stack compact.
+    for frame. Each panel is titled above its own axes.
     """
     if not selected:
         fig, ax = plt.subplots(figsize=(FIG_W, 1.1))
@@ -273,7 +273,9 @@ def draw_feature_panels(traces, selected, frame=None, max_points=2500,
     xs = np.arange(lo, hi, step)
 
     rows = len(selected)
-    fig, axes = plt.subplots(rows, 1, figsize=(FIG_W, 0.55 + panel_h * rows),
+    head = 0.30 + 0.26 * rows                 # room for one title per panel
+    fig_h = 0.55 + panel_h * rows + head
+    fig, axes = plt.subplots(rows, 1, figsize=(FIG_W, fig_h),
                              sharex=True, squeeze=False)
     axes = axes[:, 0]
 
@@ -288,20 +290,14 @@ def draw_feature_panels(traces, selected, frame=None, max_points=2500,
         if show_median and np.isfinite(v).any():
             med = float(np.nanmedian(v))
             ax.axhline(med, color=MUTED, lw=0.9, ls=":", zorder=1)
-            # inside the axes, right aligned: the plotting area is pinned to the
-            # same figure fractions as the charts above, so there is no margin
-            # outside it to write into
-            ax.text(0.996, 0.94, f"median {med:.3g} {_unit_of(key)}",
-                    transform=ax.transAxes, ha="right", va="top",
-                    fontsize=7, color=MUTED, zorder=6)
 
         ttl = f"{K.FEATURE_DISPLAY_NAMES[key]} over session"
         if frame is not None:
             cur = v[min(frame, n - 1)]
             ttl += f"  ·  frame {frame:,} = " + (f"{cur:.3f}"
                                                  if np.isfinite(cur) else "n/a")
-        ax.text(0.004, 0.94, ttl, transform=ax.transAxes, ha="left", va="top",
-                fontsize=8.5, fontweight="bold", color=INK, zorder=6)
+        ax.set_title(ttl, loc="left", pad=4.5, fontsize=9,
+                     fontweight="bold", color=INK)
 
         if frame is not None and lo <= frame < hi:
             ax.axvline(frame, color=INK, lw=1.0, ls="--", alpha=0.85, zorder=4)
@@ -313,12 +309,12 @@ def draw_feature_panels(traces, selected, frame=None, max_points=2500,
         ax.set_ylabel(_unit_of(key), color=MUTED, fontsize=7.5)
         ax.set_xlim(lo, hi - 1 if hi > lo else lo + 1)
         ax.tick_params(labelsize=7, colors=MUTED)
-        ax.margins(y=0.22)
+        ax.margins(y=0.10)
 
     axes[-1].set_xlabel("Frame", color=MUTED)
     fig.subplots_adjust(left=AX_LEFT, right=AX_RIGHT,
-                        top=1 - 0.30 / (0.55 + panel_h * rows),
-                        bottom=0.55 / (0.55 + panel_h * rows), hspace=0.28)
+                        top=1 - 0.34 / fig_h, bottom=0.55 / fig_h,
+                        hspace=(head / rows) / panel_h + 0.10)
     return fig
 
 
