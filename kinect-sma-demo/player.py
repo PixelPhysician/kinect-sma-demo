@@ -85,7 +85,8 @@ def pack_window(raw, conf, traces, selected, start, stop, joints, cube, fps,
         seg = K.stage_segments(np.asarray(mov[sl]).astype(np.int16))
         mband = [{"a": int(a), "b": int(b),
                   "c": K.MOVEMENT_COLORS.get(movements[m], "#999"),
-                  "n": movements[m]} for a, b, m in seg if m >= 0]
+                  "n": K.MOVEMENT_LABELS.get(movements[m], movements[m])}
+                 for a, b, m in seg if m >= 0]
 
     # frames the pipeline discards: outside gameplay, or more than one body
     xband = []
@@ -184,6 +185,7 @@ scrub.max = D.F - 1;
 
 let frame = 0, playing = false, last = 0, acc = 0;
 let W = 0, PH = 0, FH = 150;
+const BANDH = 6;      // strip reserved at the foot of the feature panel
 
 function resize(){
   const cssW = skel.parentElement.clientWidth || 900;
@@ -299,12 +301,12 @@ function drawFeatBase(){
   // "excluded" rather than "missing"
   const XX = i => (D.F<2) ? 0 : i*(W-2)/(D.F-1) + 1;
   g.fillStyle='#eef1f5';
-  for (const b of (D.xband||[])) g.fillRect(XX(b.a), 0, Math.max(1, XX(b.b)-XX(b.a)), FH-13);
+  for (const b of (D.xband||[])) g.fillRect(XX(b.a), 0, Math.max(1, XX(b.b)-XX(b.a)), FH-BANDH-2);
   g.strokeStyle='#eef1f5'; g.lineWidth=1;
-  for (let k=0;k<=4;k++){ const y=8+(FH-22)*k/4;
+  for (let k=0;k<=4;k++){ const y=8+(FH-18-BANDH)*k/4;
     g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
   const X = i => (D.F<2) ? 0 : i*(W-2)/(D.F-1) + 1;
-  const Y = v => 8 + (FH-22)*(1-v);
+  const Y = v => 8 + (FH-18-BANDH)*(1-v);
   for (let s=0; s<D.S; s++){
     g.strokeStyle = D.fmeta[s].colour; g.lineWidth = 1.5;
     g.beginPath(); let pen = false;
@@ -323,27 +325,22 @@ function drawCursor(){
   if (featBase) fc.drawImage(featBase, 0, 0, W, FH);
   const x = (D.F<2) ? 0 : frame*(W-2)/(D.F-1) + 1;
 
-  // phase and movement ribbons along the bottom
-  const yb = FH-11;
+  // game phase along the bottom. The movement ribbon is deliberately not drawn
+  // any more, though D.mband is still carried so the readout can name the task.
   for (const b of D.band){
     fc.fillStyle=b.c; fc.globalAlpha=0.5;
-    fc.fillRect((D.F<2?0:b.a*(W-2)/(D.F-1)), yb,
-                Math.max(1,(b.b-b.a)*(W-2)/Math.max(1,D.F-1)), 5);
-  }
-  for (const b of D.mband){
-    fc.fillStyle=b.c; fc.globalAlpha=0.85;
-    fc.fillRect((D.F<2?0:b.a*(W-2)/(D.F-1)), yb+5.5,
-                Math.max(1,(b.b-b.a)*(W-2)/Math.max(1,D.F-1)), 5);
+    fc.fillRect((D.F<2?0:b.a*(W-2)/(D.F-1)), FH-BANDH,
+                Math.max(1,(b.b-b.a)*(W-2)/Math.max(1,D.F-1)), 4);
   }
   fc.globalAlpha=1;
   fc.strokeStyle='#1f2733'; fc.lineWidth=1.2;
-  fc.beginPath(); fc.moveTo(x,0); fc.lineTo(x,FH-13); fc.stroke();
+  fc.beginPath(); fc.moveTo(x,0); fc.lineTo(x,FH-BANDH-2); fc.stroke();
   for (let s=0;s<D.S;s++){
     const raw = FEAT[frame*D.S + s];
     if (raw === 65535) continue;
     fc.fillStyle = D.fmeta[s].colour;
     fc.beginPath();
-    fc.arc(x, 8 + (FH-22)*(1-raw/65534), 3.4, 0, 6.2832); fc.fill();
+    fc.arc(x, 8 + (FH-18-BANDH)*(1-raw/65534), 3.4, 0, 6.2832); fc.fill();
     fc.strokeStyle='#fff'; fc.lineWidth=1; fc.stroke();
   }
 }
