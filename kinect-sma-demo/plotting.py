@@ -28,6 +28,11 @@ plt.rcParams.update({
 INK = "#1f2733"
 MUTED = "#8a93a0"
 
+# the whole-recording charts are stacked, so their plotting areas are pinned to
+# the same figure fractions and they line up frame for frame
+FIG_W = 13.2
+AX_LEFT, AX_RIGHT = 0.075, 0.988
+
 
 def _proj(view, xyz):
     x, y, z = xyz[..., 0], xyz[..., 1], xyz[..., 2]
@@ -89,7 +94,7 @@ def draw_skeleton(pos, conf, cube, joints, title="", show_labels=False):
 # timeline: game phase ribbon + movement ribbon + completed-movement raster
 # =========================================================================
 def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
-                  nbody=None, height=2.6, window=None):
+                  nbody=None, height=3.05, window=None):
     """Game phase along the top, completed repetitions below.
 
     `mov` is still accepted so callers do not change, but the movement-block
@@ -98,7 +103,7 @@ def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
     """
     n = len(stage)
     rows = 2 if flags is not None else 1
-    fig, axes = plt.subplots(rows, 1, figsize=(13.2, height),
+    fig, axes = plt.subplots(rows, 1, figsize=(FIG_W, height),
                              gridspec_kw={"height_ratios": [1, 2.6][:rows]},
                              sharex=True)
     axes = np.atleast_1d(axes)
@@ -146,15 +151,22 @@ def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
         ax.tick_params(labelsize=7, colors=MUTED)
     axes[-1].set_xlabel("Frame", color=MUTED)
 
-    handles = [mpatches.Patch(color=K.STAGE_COLORS[s], label=K.STAGE_NAMES[s])
+    phase_h = [mpatches.Patch(color=K.STAGE_COLORS[s], label=K.STAGE_NAMES[s])
                for s in sorted(set(int(v) for v in np.unique(stage)))]
-    handles += [mpatches.Patch(color=K.MOVEMENT_COLORS[m], label=m)
-                for m in movements if m in K.MOVEMENT_COLORS]
     if nbody is not None and (nbody != 1).any():
-        handles.append(mpatches.Patch(color="#d62728", label="second body in frame"))
-    axes[0].legend(handles=handles, ncol=8, fontsize=6.5,
-                   loc="lower left", bbox_to_anchor=(0, 1.05))
-    fig.tight_layout()
+        phase_h.append(mpatches.Patch(color="#d62728", label="second body in frame"))
+    mov_h = [mpatches.Patch(color=K.MOVEMENT_COLORS[m],
+                            label=K.MOVEMENT_LABELS.get(m, m))
+             for m in movements if m in K.MOVEMENT_COLORS]
+
+    fig.subplots_adjust(left=AX_LEFT, right=AX_RIGHT, top=0.775, bottom=0.155,
+                        hspace=0.18)
+    for hs, y in ((phase_h, 0.925), (mov_h, 0.845)):
+        if hs:
+            fig.legend(handles=hs, ncol=len(hs), fontsize=6.5, frameon=False,
+                       loc="lower left", bbox_to_anchor=(AX_LEFT, y),
+                       bbox_transform=fig.transFigure, columnspacing=1.4,
+                       handlelength=1.5, handletextpad=0.45)
     return fig
 
 
@@ -163,11 +175,13 @@ def draw_timeline(stage, mov, movements, flags, flag_names, frame=None,
 # =========================================================================
 def draw_features(traces, selected, frame=None, normalise=True, max_points=2500,
                   window=None, span=None):
-    fig, ax = plt.subplots(figsize=(13.2, 4.0))
+    rows_leg = int(np.ceil(len(selected) / 4)) if selected else 1
+    fig, ax = plt.subplots(figsize=(FIG_W, 3.6 + 0.16 * rows_leg))
     if not selected:
-        ax.text(0.5, 0.5, "Select one or more features in the sidebar",
+        ax.text(0.5, 0.5, "Select one or more features above",
                 ha="center", va="center", color=MUTED, fontsize=11)
         ax.set_axis_off()
+        fig.subplots_adjust(left=AX_LEFT, right=AX_RIGHT)
         return fig
 
     n = len(next(iter(traces.values())))
@@ -208,10 +222,11 @@ def draw_features(traces, selected, frame=None, normalise=True, max_points=2500,
     ax.set_xlabel("Frame (gameplay frames, 30 Hz)", color=MUTED)
     ax.set_ylabel("Normalised 0-1" if normalise else "Raw value", color=MUTED)
     ax.tick_params(labelsize=7.5, colors=MUTED)
-    ax.legend(fontsize=7.5, loc="lower left", bbox_to_anchor=(0, 1.005),
+    ax.legend(fontsize=7.5, loc="lower left", bbox_to_anchor=(0, 1.02),
               ncol=4, frameon=False, borderaxespad=0, columnspacing=1.6,
               handlelength=1.6, handletextpad=0.5)
-    fig.tight_layout()
+    fig.subplots_adjust(left=AX_LEFT, right=AX_RIGHT, bottom=0.15,
+                        top=0.90 - 0.045 * rows_leg)
     return fig
 
 
