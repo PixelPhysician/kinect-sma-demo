@@ -92,6 +92,9 @@ st.markdown("""
   .bad  {background:#fdE6e6; color:#a32020;}
   [data-testid="stMetricValue"] {font-size:1.35rem;}
   .cap {color:#8a93a0; font-size:.8rem; line-height:1.45;}
+  /* a lighter rule than st.divider(), for separating the sub-blocks that
+     belong to one section */
+  hr.soft {border:0; border-top:1px solid #e9edf2; margin:1.5rem 0 .9rem 0;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -199,7 +202,7 @@ def load_viewer(path):
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
-def session_charts(path, feat_key):
+def session_charts(path, feat_key, normalise=True):
     """The whole-session timeline and feature chart. Static, so they are drawn
     once per session instead of once per animation frame."""
     import io
@@ -209,7 +212,7 @@ def session_charts(path, feat_key):
                                  V["flags"], V["meta"]["gestureFlags"],
                                  frame=None, nbody=V["nbody"]),
                 PL.draw_features(V["traces"], list(feat_key), frame=None,
-                                 normalise=True)):
+                                 normalise=normalise)):
         # no tight bbox: cropping each figure separately would undo the
         # alignment of the two x-axes
         buf = io.BytesIO()
@@ -393,6 +396,11 @@ with _tabs["Session viewer"]:
         "Overlay on the graph", K.TARGET_12_FEATURES, key="feat_sel",
         format_func=lambda k: K.FEATURE_DISPLAY_NAMES[k],
         label_visibility="collapsed")
+    # a multiselect hands back the options in the order they were ticked, so
+    # without this the panels, the legend and the player readout would each be
+    # in whatever order the last click produced
+    _sel = set(selected)
+    selected = [k for k in K.TARGET_12_FEATURES if k in _sel]
     with fc[3]:
         st.markdown('<div style="height:.35rem"></div>', unsafe_allow_html=True)
         normalise = st.toggle("Normalise to 0-1", value=True)
@@ -402,26 +410,38 @@ with _tabs["Session viewer"]:
         payload = window_payload(PATHS[name], 0, N, tuple(selected))
     components.html(PLY.html(payload), height=700, scrolling=False)
 
-    # ---- the same features, one panel each ------------------------------
-    # directly under the player: the overlay inside the player shows them all
-    # together, this shows each one on its own before the page moves on
+    # ---- the whole recording, one stacked block --------------------------
+    # all three charts are pinned to the same figure fractions, so read top to
+    # bottom they line up frame for frame: everything together, then every
+    # feature on its own, then what the game was doing at that moment
+    st.divider()
+    st.markdown("##### Whole recording")
+
+    tl_png, ft_png = session_charts(PATHS[name], tuple(selected), normalise)
+    st.markdown('<span class="cap">All selected features together, '
+                + ("normalised to 0-1 so they share one vertical scale."
+                   if normalise else "in raw units on a shared vertical scale.")
+                + "</span>", unsafe_allow_html=True)
+    st.image(ft_png, use_container_width=True)
+
+    st.markdown('<hr class="soft">', unsafe_allow_html=True)
     hc = st.columns([5, 2.2])
-    hc[0].markdown("##### Each feature on its own")
+    hc[0].markdown("**Each feature on its own**")
     with hc[1]:
-        st.markdown('<div style="height:.35rem"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height:.15rem"></div>', unsafe_allow_html=True)
         per_feature = st.toggle("Show individual panels", value=True)
     if per_feature:
-        st.markdown('<span class="cap">One panel per selected feature, in its '
-                    "own raw units and on the same frame axis as the player "
-                    "above. Gaps are frames the pipeline discards.</span>",
-                    unsafe_allow_html=True)
+        st.markdown('<span class="cap">One panel per selected feature, each in '
+                    "its own raw units on the same frame axis. Gaps are frames "
+                    "the pipeline discards.</span>", unsafe_allow_html=True)
         st.image(feature_panels(PATHS[name], tuple(selected)),
                  use_container_width=True)
 
-    st.divider()
-    st.markdown("##### Whole recording")
-    tl_png, ft_png = session_charts(PATHS[name], tuple(selected))
-    st.image(ft_png, use_container_width=True)
+    st.markdown('<hr class="soft">', unsafe_allow_html=True)
+    st.markdown("**Game phase and completed repetitions**")
+    st.markdown('<span class="cap">Which screen the game was on, and every '
+                "repetition it scored as completed.</span>",
+                unsafe_allow_html=True)
     st.image(tl_png, use_container_width=True)
 
     with st.expander("All 32 tracked joints, and how the skeleton is drawn"):
