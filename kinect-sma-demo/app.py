@@ -248,15 +248,13 @@ JOINT_GROUPS = [
 
 def joint_legend_html():
     import matplotlib.colors as mcolors
-    used = set(K.ANGLE_JOINTS)
     cols = []
     for title, names in JOINT_GROUPS:
         items = ""
         for n in names:
             hexc = mcolors.to_hex(K.JOINT_COLORS.get(n, "black"))
-            star = ' <b title="feeds the feature computation">&#9679;</b>' if n in used else ""
             items += (f'<div class="ji"><i class="sw" style="background:{hexc}"></i>'
-                      f'{n}{star}</div>')
+                      f'{n}</div>')
         cols.append(f'<div class="jg"><div class="jt">{title}</div>{items}</div>')
     return f"""
 <style>
@@ -283,15 +281,7 @@ def joint_legend_html():
 <div class="jnote">
 The Kinect reports all 32 joints on every frame, each with an <i>x / y / z</i>
 position, an orientation quaternion and a tracking-confidence level. In the viewer
-the <b>bones are drawn first, in the background</b>, and the <b>joint markers on
-top, in the foreground</b>, so no marker is hidden behind a segment. A marker's
-opacity is its tracking confidence, so you can see the tracker losing a joint as it
-fades rather than disappearing.<br><br>
-All 32 joints are drawn, but <b>only the 14 marked &#9679; are used to compute the
-twelve features</b>, and only on frames where they were tracked at Medium
-confidence or better. Anything below that is set to missing, gaps up to five frames
-are interpolated, and the remainder is low-pass filtered at 5 Hz before any angle
-is measured.
+the bones are drawn first, in the background, and the joint markers on top.
 </div>
 """
 
@@ -393,14 +383,32 @@ with _tabs["Session viewer"]:
             f"<b>{K.FEATURE_DISPLAY_NAMES[k]}</b> - {K.TRACE_MEANING[k]}"
             for k in selected) + "</span>", unsafe_allow_html=True)
 
-    with st.expander("All 32 tracked joints, and how the skeleton is drawn"):
-        st.markdown(joint_legend_html(), unsafe_allow_html=True)
-
     st.divider()
     st.markdown("##### Whole recording")
     tl_png, ft_png = session_charts(PATHS[name], tuple(selected))
     st.image(ft_png, use_container_width=True)
     st.image(tl_png, use_container_width=True)
+
+    with st.expander("All 32 tracked joints, and how the skeleton is drawn"):
+        st.markdown(joint_legend_html(), unsafe_allow_html=True)
+
+    with st.expander("Notes, definitions and caveats"):
+        st.markdown("""
+**Coordinate handling.** Raw Kinect positions are in millimetres with *+y pointing
+down*. On load they are divided by 1000 and *y* is negated, so in every computation
+and plot **+y is up**. The three panels show front *(x, -y)*, side *(z, -y)* and
+top *(x, z)* in metres, on a shared cubic axis range, so proportions are preserved.
+
+**Movement protocol.** From the neutral resting position (sitting upright, arms
+relaxed on the thighs) the game requests elbow flexion (continuous, 30-100 deg),
+horizontal abduction (continuous: arm-forward to spine-forward 0-70 deg, upper arm
+to spinal down 30-80 deg, forearm near horizontal at 77-113 deg), head rotation
+(sequential, about 45 deg then back to neutral), thoracic extension (sequential,
+reaching about 190 deg then returning) and hand opening and closing (sequential,
+fist 30-90 deg then opening 100-180 deg), plus lateral reaching. The synthetic
+participants attempt the same protocol; the weaker profile achieves a smaller
+fraction of it and compensates with the trunk.
+        """)
 
 # =========================================================================
 # TAB - feature distributions
@@ -498,51 +506,3 @@ if SHOW_CROSS_SESSION:
         feat = st.selectbox("Feature", K.TARGET_12_FEATURES,
                             format_func=lambda k: K.FEATURE_DISPLAY_NAMES[k])
         st.pyplot(PL.draw_comparison(sums, feat, order), clear_figure=True)
-
-# =========================================================================
-with st.expander("Notes, definitions and caveats"):
-    st.markdown("""
-**Coordinate handling.** Raw Kinect positions are in millimetres with *+y pointing
-down*. On load they are divided by 1000 and *y* is negated, so in every computation
-and plot **+y is up**. The three panels show front *(x, -y)*, side *(z, -y)* and
-top *(x, z)* in metres, on a shared cubic axis range, so proportions are preserved.
-
-**Movement protocol.** From the neutral resting position (sitting upright, arms
-relaxed on the thighs) the game requests elbow flexion (continuous, 30-100 deg),
-horizontal abduction (continuous: arm-forward to spine-forward 0-70 deg, upper arm
-to spinal down 30-80 deg, forearm near horizontal at 77-113 deg), head rotation
-(sequential, about 45 deg then back to neutral), thoracic extension (sequential,
-reaching about 190 deg then returning) and hand opening and closing (sequential,
-fist 30-90 deg then opening 100-180 deg), plus lateral reaching. The synthetic
-participants attempt the same protocol; the weaker profile achieves a smaller
-fraction of it and compensates with the trunk.
-
-**Traces vs. scalars.** The animated curves are instantaneous, rolling or
-cumulative versions of the features so they can be watched frame by frame. Log
-dimensionless jerk and the trunk compensation ratio use a 4-second sliding window;
-workspace volume and % time above shoulder accumulate from the start of the
-session. The distributions tab reports the session-level scalars instead.
-
-**Gaps in the traces.** A trace goes blank wherever a frame was removed by the
-frame-level filter: anything outside the gameplay phase, or any frame where the
-sensor reported more than one body. Nothing is interpolated across those
-stretches, and the player shades them grey so a blank stretch reads as excluded
-rather than missing.
-
-**Playback.** The whole recording is loaded. Frames are thinned by an integer step
-so a twenty-minute session fits in the browser, while the clock and the frame
-counter still refer to the true frame numbers of the original file. Speed runs
-from 0.25x to 10x real time, default 2x, with an optional repeat. The space bar
-toggles play, the arrow buttons step one frame, and dragging the scrubber pauses
-first. Playback is drawn in the browser, so it costs no server round-trips.
-
-**Interpretation.** More negative log dimensionless jerk means a less smooth
-movement. A higher trunk compensation ratio means more trunk displacement per unit
-of hand displacement, that is, the reach is being achieved by moving the body
-rather than the arm.
-
-**Files.** Each session also exists as `<name>.json.gz`, the complete recording in
-the original schema, and `<name>_excerpt.json`, a short pretty-printed excerpt. An
-uncompressed 20-minute session is roughly 200 MB, which is why the full files are
-gzipped and the application reads compact `.npz` arrays instead.
-    """)
