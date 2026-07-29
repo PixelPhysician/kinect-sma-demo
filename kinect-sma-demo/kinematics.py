@@ -670,8 +670,9 @@ def recording_to_arrays(rec, name="session", patient_map=None, fps=FPS):
 
     lab_idx = _label_index(rec)
     flag_names = [n for n in lab_idx if "-" in n and len(n) <= 5]
-    flag_names = [n for n in ["HA-L", "HA-R", "OC-L", "OC-R", "TE",
-                              "HR-L", "HR-R", "EF-L", "EF-R"] if n in lab_idx]         or flag_names
+    known = [n for n in ["HA-L", "HA-R", "OC-L", "OC-R", "TE",
+                         "HR-L", "HR-R", "EF-L", "EF-R"] if n in lab_idx]
+    flag_names = known or flag_names
     ang_names = [n for n in lab_idx if n.count("-") == 1 and "_" in n]
 
     P = np.full((N, nj, 3), np.nan, np.float32)
