@@ -220,6 +220,20 @@ def session_charts(path, feat_key):
     return out
 
 
+@st.cache_data(max_entries=4, show_spinner=False)
+def feature_panels(path, feat_key):
+    """One isolated panel per selected feature, in raw units, stacked on the
+    same frame axis as the two charts above."""
+    import io
+    import matplotlib.pyplot as plt
+    V = load_viewer(path)
+    fig = PL.draw_feature_panels(V["traces"], list(feat_key), frame=None)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=110)
+    plt.close(fig)
+    return buf.getvalue()
+
+
 @st.cache_data(max_entries=6, show_spinner=False)
 def window_payload(path, start, stop, feat_key):
     V = load_viewer(path)
@@ -393,6 +407,20 @@ with _tabs["Session viewer"]:
     tl_png, ft_png = session_charts(PATHS[name], tuple(selected))
     st.image(ft_png, use_container_width=True)
     st.image(tl_png, use_container_width=True)
+
+    st.divider()
+    hc = st.columns([5, 2.2])
+    hc[0].markdown("##### Each feature on its own")
+    with hc[1]:
+        st.markdown('<div style="height:.35rem"></div>', unsafe_allow_html=True)
+        per_feature = st.toggle("Show individual panels", value=True)
+    if per_feature:
+        st.markdown('<span class="cap">One panel per selected feature, in its '
+                    "own raw units and on the same frame axis as the charts "
+                    "above. Gaps are frames the pipeline discards.</span>",
+                    unsafe_allow_html=True)
+        st.image(feature_panels(PATHS[name], tuple(selected)),
+                 use_container_width=True)
 
     with st.expander("All 32 tracked joints, and how the skeleton is drawn"):
         st.markdown(joint_legend_html(), unsafe_allow_html=True)
