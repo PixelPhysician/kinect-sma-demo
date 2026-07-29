@@ -203,8 +203,10 @@ def session_charts(path, feat_key):
                                  frame=None, nbody=V["nbody"]),
                 PL.draw_features(V["traces"], list(feat_key), frame=None,
                                  normalise=True)):
+        # no tight bbox: cropping each figure separately would undo the
+        # alignment of the two x-axes
         buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+        fig.savefig(buf, format="png", dpi=110)
         out.append(buf.getvalue())
         import matplotlib.pyplot as plt
         plt.close(fig)
@@ -417,8 +419,10 @@ with _tabs["Feature distributions"]:
     st.markdown(f"##### Per-session feature distributions — {name}")
     S = get_summary(PATHS[name])
     df = pd.DataFrame(S["dist"])
+    # size the frame to its contents so all twelve features are visible at once
+    # rather than the default ten-row scrolling window
     st.dataframe(df.style.format(precision=3, na_rep="-"), hide_index=True,
-                 use_container_width=True)
+                 use_container_width=True, height=(len(df) + 1) * 35 + 3)
     st.download_button("Download this table as CSV",
                        df.to_csv(index=False).encode(),
                        file_name=f"{name}_feature_distributions.csv",
