@@ -301,12 +301,13 @@ the bones are drawn first, in the background, and the joint markers on top.
 st.markdown("""
 <div class="hero">
   <h1>Markerless motion capture in paediatric SMA</h1>
-  <p>Azure Kinect DK skeleton recordings from home-based exergaming, with the
-  physiotherapy movement protocol, session quality control, and the twelve
-  canonical upper-limb kinematic features. Every recording below is
-  <strong>synthetic</strong> - procedurally generated to imitate two contrasting
-  motor profiles plus one deliberately faulty session. No real participant data,
-  identifiers or clinical scores appear anywhere in this application.</p>
+  <p>Simulated Azure Kinect DK skeleton recordings from home-based exergaming,
+  with the physiotherapy movement protocol, session quality control, and the
+  twelve canonical upper-limb kinematic features. Choose patient and session on
+  the left side. The recording is <strong>synthetic</strong>: it is procedurally
+  generated to imitate two contrasting motor profiles with two sessions each,
+  plus one deliberately faulty session. No real participant data, identifiers or
+  clinical scores appear anywhere in this application.</p>
 </div>
 """, unsafe_allow_html=True)
 
