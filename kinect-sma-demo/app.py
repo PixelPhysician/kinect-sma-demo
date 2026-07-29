@@ -402,13 +402,9 @@ with _tabs["Session viewer"]:
         payload = window_payload(PATHS[name], 0, N, tuple(selected))
     components.html(PLY.html(payload), height=700, scrolling=False)
 
-    st.divider()
-    st.markdown("##### Whole recording")
-    tl_png, ft_png = session_charts(PATHS[name], tuple(selected))
-    st.image(ft_png, use_container_width=True)
-    st.image(tl_png, use_container_width=True)
-
-    st.divider()
+    # ---- the same features, one panel each ------------------------------
+    # directly under the player: the overlay inside the player shows them all
+    # together, this shows each one on its own before the page moves on
     hc = st.columns([5, 2.2])
     hc[0].markdown("##### Each feature on its own")
     with hc[1]:
@@ -416,11 +412,17 @@ with _tabs["Session viewer"]:
         per_feature = st.toggle("Show individual panels", value=True)
     if per_feature:
         st.markdown('<span class="cap">One panel per selected feature, in its '
-                    "own raw units and on the same frame axis as the charts "
+                    "own raw units and on the same frame axis as the player "
                     "above. Gaps are frames the pipeline discards.</span>",
                     unsafe_allow_html=True)
         st.image(feature_panels(PATHS[name], tuple(selected)),
                  use_container_width=True)
+
+    st.divider()
+    st.markdown("##### Whole recording")
+    tl_png, ft_png = session_charts(PATHS[name], tuple(selected))
+    st.image(ft_png, use_container_width=True)
+    st.image(tl_png, use_container_width=True)
 
     with st.expander("All 32 tracked joints, and how the skeleton is drawn"):
         st.markdown(joint_legend_html(), unsafe_allow_html=True)
