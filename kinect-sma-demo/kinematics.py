@@ -162,18 +162,18 @@ ROM_LIKE = ["elbow_rom_R", "shoulder_flexext_rom_R", "shoulder_abdadd_rom_R",
 #   temporal kinematics neutral greys
 #   functional patterns ambers
 FEATURE_COLORS = {
-    "norm_jerk_R": "#4f5359",
-    "elbow_rom_R": "#1d3c63",
-    "shoulder_flexext_rom_R": "#2f6ca3",
-    "shoulder_abdadd_rom_R": "#6ba3cc",
-    "shoulder_girdle_rom_R": "#88a6bd",
-    "neck_rotation_rom": "#97b78e",
-    "neck_flexext_rom": "#559a63",
-    "thoracic_ext_rom": "#256b38",
-    "workspace_R_m3": "#c9502e",
-    "vel_hand_R_mean": "#a09a92",
-    "trunk_comp_R": "#c08a1e",
-    "pct_above_shoulder_R": "#e3c04f",
+    "norm_jerk_R": "#3f4653",
+    "elbow_rom_R": "#17365e",
+    "shoulder_flexext_rom_R": "#1f5f9c",
+    "shoulder_abdadd_rom_R": "#2f8fbf",
+    "shoulder_girdle_rom_R": "#3fb0ad",
+    "neck_rotation_rom": "#52b98a",
+    "neck_flexext_rom": "#4f9e5a",
+    "thoracic_ext_rom": "#2f7038",
+    "workspace_R_m3": "#d94f36",
+    "vel_hand_R_mean": "#949cab",
+    "trunk_comp_R": "#b8721a",
+    "pct_above_shoulder_R": "#d4b23a",
 }
 
 # interpretation bands
