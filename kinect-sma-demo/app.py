@@ -54,6 +54,15 @@ PATIENT_ID_MAP = {
 
 DATA_DIR = "data"                           # bundled synthetic sessions
 
+#  Features ticked when the page first loads. Keys are from
+#  kinematics.TARGET_12_FEATURES; anything unrecognised is ignored.
+DEFAULT_FEATURES = [
+    "elbow_rom_R",             # Elbow Flex/Ext ROM (deg)
+    "shoulder_abdadd_rom_R",   # Shoulder Abd/Add ROM (deg)
+    "neck_flexext_rom",        # Neck Flex/Ext ROM (deg)
+    "vel_hand_R_mean",         # Mean Hand Speed (m/s)
+]
+
 #  Tabs that are built but not displayed. Flip either to True to bring it back.
 SHOW_QUALITY_CONTROL = False
 SHOW_CROSS_SESSION = False
@@ -388,8 +397,9 @@ with _tabs["Session viewer"]:
                 unsafe_allow_html=True)
     st.markdown('<div style="height:.4rem"></div>', unsafe_allow_html=True)
     if "feat_sel" not in st.session_state:
-        st.session_state["feat_sel"] = ["shoulder_flexext_rom_R", "elbow_rom_R",
-                                        "trunk_comp_R"]
+        _want = set(DEFAULT_FEATURES)
+        st.session_state["feat_sel"] = [k for k in K.TARGET_12_FEATURES
+                                        if k in _want]
     fc = st.columns([5, 0.75, 0.75, 1.6])
     with fc[1]:
         st.markdown('<div style="height:.35rem"></div>', unsafe_allow_html=True)
