@@ -29,10 +29,23 @@ def _b64(arr):
     return base64.b64encode(np.ascontiguousarray(arr).tobytes()).decode("ascii")
 
 
+MAX_PLAYER_FRAMES = 5400        # about 3 min at full rate; longer spans decimate
+
+
 def pack_window(raw, conf, traces, selected, start, stop, joints, cube, fps,
-                stage=None, mov=None, movements=None):
-    """Builds the JSON payload for one window of frames."""
-    pos = raw[start:stop] * 1000.0                       # metres -> millimetres
+                stage=None, mov=None, movements=None, nbody=None,
+                max_frames=MAX_PLAYER_FRAMES):
+    """
+    Builds the JSON payload for one span of the recording.
+
+    Spans longer than `max_frames` are decimated by an integer step so that the
+    whole session can be loaded without shipping tens of megabytes. The step is
+    reported back so the clock and the frame counter still refer to the true
+    frame numbers of the original recording.
+    """
+    step = max(1, -(-(stop - start) // max_frames))
+    sl = slice(start, stop, step)
+    pos = raw[sl] * 1000.0                               # metres -> millimetres
     bad = ~np.isfinite(pos).all(axis=2)
     pos = np.nan_to_num(pos, nan=0.0, posinf=0.0, neginf=0.0)
     pos = np.clip(np.rint(pos), -32767, 32767).astype(np.int16)
@@ -47,7 +60,7 @@ def pack_window(raw, conf, traces, selected, start, stop, joints, cube, fps,
 
     feats, fmeta = [], []
     for key in selected:
-        v = np.asarray(traces[key][start:stop], float)
+        v = np.asarray(traces[key][sl], float)
         lo = np.nanmin(traces[key]) if np.isfinite(traces[key]).any() else 0.0
         hi = np.nanmax(traces[key]) if np.isfinite(traces[key]).any() else 1.0
         span = hi - lo if hi - lo > 1e-12 else 1.0
@@ -63,25 +76,35 @@ def pack_window(raw, conf, traces, selected, start, stop, joints, cube, fps,
 
     band = []
     if stage is not None:
-        seg = K.stage_segments(np.asarray(stage[start:stop]))
+        seg = K.stage_segments(np.asarray(stage[sl]))
         band = [{"a": int(a), "b": int(b),
                  "c": K.STAGE_COLORS.get(int(s), "#cccccc"),
                  "n": K.STAGE_NAMES.get(int(s), str(s))} for a, b, s in seg]
     mband = []
     if mov is not None and movements:
-        seg = K.stage_segments(np.asarray(mov[start:stop]).astype(np.int16))
+        seg = K.stage_segments(np.asarray(mov[sl]).astype(np.int16))
         mband = [{"a": int(a), "b": int(b),
                   "c": K.MOVEMENT_COLORS.get(movements[m], "#999"),
                   "n": movements[m]} for a, b, m in seg if m >= 0]
 
+    # frames the pipeline discards: outside gameplay, or more than one body
+    xband = []
+    if stage is not None:
+        excl = np.asarray(stage[sl]) != K.ALCHEMY_STAGE
+        if nbody is not None:
+            excl |= np.asarray(nbody[sl]) != 1
+        xband = [{"a": int(a), "b": int(b)}
+                 for a, b, v in K.stage_segments(excl.astype(np.int8)) if v]
+
     return {
-        "F": int(stop - start), "J": len(joints), "fps": float(fps),
+        "F": int(pos.shape[0]), "J": len(joints),
+        "fps": float(fps) / step, "srcFps": float(fps), "step": int(step),
         "offset": int(start),
-        "pos": _b64(pos), "conf": _b64(conf[start:stop].astype(np.uint8)),
+        "pos": _b64(pos), "conf": _b64(conf[sl].astype(np.uint8)),
         "feat": _b64(feats), "S": int(feats.shape[1]),
         "bones": bones, "boneCol": bone_col, "jointCol": joint_col,
         "cube": {k: [float(v[0]), float(v[1])] for k, v in cube.items()},
-        "fmeta": fmeta, "band": band, "mband": mband,
+        "fmeta": fmeta, "band": band, "mband": mband, "xband": xband,
     }
 
 
@@ -92,13 +115,15 @@ _HTML = r"""
     <button id="play" class="prim">Play</button>
     <button id="back">&#8592;</button>
     <button id="fwd">&#8594;</button>
+    <button id="rst">Restart</button>
     <label class="lb">Speed
       <select id="spd">
         <option value="0.25">0.25x</option>
         <option value="0.5">0.5x</option>
-        <option value="1" selected>1x</option>
-        <option value="2">2x</option>
+        <option value="1">1x</option>
+        <option value="2" selected>2x</option>
         <option value="4">4x</option>
+        <option value="10">10x</option>
       </select>
     </label>
     <label class="lb"><input type="checkbox" id="loop" checked> Loop</label>
@@ -116,7 +141,7 @@ _HTML = r"""
   #bar button{border:1px solid #d3d9e0;background:#fff;border-radius:7px;
     padding:.3rem .8rem;font-size:.83rem;cursor:pointer;color:#1f2733;}
   #bar button:hover{background:#f2f5f9;}
-  #bar button.prim{background:#2b5a8f;border-color:#2b5a8f;color:#fff;min-width:74px;}
+  #bar button.prim{background:#2b5a8f;border-color:#2b5a8f;color:#fff;min-width:92px;}
   #bar button.prim:hover{background:#224975;}
   .lb{font-size:.78rem;color:#6b7683;display:flex;align-items:center;gap:.3rem;}
   .lb select{font-size:.78rem;padding:.16rem .3rem;border-radius:6px;
@@ -256,6 +281,11 @@ function drawFeatBase(){
   c.width = W*dpr; c.height = FH*dpr;
   const g = c.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
   g.clearRect(0,0,W,FH);
+  // frames the pipeline discards are shaded, so a blank stretch reads as
+  // "excluded" rather than "missing"
+  const XX = i => (D.F<2) ? 0 : i*(W-2)/(D.F-1) + 1;
+  g.fillStyle='#eef1f5';
+  for (const b of (D.xband||[])) g.fillRect(XX(b.a), 0, Math.max(1, XX(b.b)-XX(b.a)), FH-13);
   g.strokeStyle='#eef1f5'; g.lineWidth=1;
   for (let k=0;k<=4;k++){ const y=8+(FH-22)*k/4;
     g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
@@ -304,16 +334,18 @@ function drawCursor(){
   }
 }
 
+function trueFrame(i){ return D.offset + i*D.step; }
 function updateReadout(){
-  const t = (D.offset + frame)/D.fps;
+  const t = trueFrame(frame)/D.srcFps;
   const m = Math.floor(t/60), s = t - m*60;
   clock.textContent = String(m).padStart(2,'0')+':'+s.toFixed(2).padStart(5,'0');
   let ph = '';
   for (const b of D.band) if (frame>=b.a && frame<b.b) ph = b.n;
   let mv = '';
   for (const b of D.mband) if (frame>=b.a && frame<b.b) mv = b.n;
-  phase.textContent = 'frame ' + (D.offset+frame+1).toLocaleString()
-                    + (ph ? '  \u00b7  ' + ph : '') + (mv ? '  \u00b7  ' + mv : '');
+  phase.textContent = 'frame ' + (trueFrame(frame)+1).toLocaleString()
+                    + (ph ? '  \u00b7  ' + ph : '') + (mv ? '  \u00b7  ' + mv : '')
+                    + (D.step > 1 ? '  \u00b7  every ' + D.step + 'th frame' : '');
   let h = '';
   for (let s2=0;s2<D.S;s2++){
     const raw = FEAT[frame*D.S + s2];
@@ -329,7 +361,8 @@ function updateReadout(){
 // ---- transport ----
 function setPlaying(p){
   playing = p; playB.textContent = p ? 'Pause' : 'Play';
-  if (p){ last = performance.now(); acc = 0; requestAnimationFrame(tick); }
+  if (p){ if (frame >= D.F-1) frame = 0;
+          last = performance.now(); acc = 0; requestAnimationFrame(tick); }
 }
 function tick(now){
   if (!playing) return;
@@ -337,21 +370,22 @@ function tick(now){
   acc += (now - last)/1000 * D.fps * spd;
   last = now;
   if (acc >= 1){
-    let step = Math.floor(acc); acc -= step;
+    const step = Math.floor(acc); acc -= step;
     frame += step;
     if (frame >= D.F){
       if (document.getElementById('loop').checked){ frame %= D.F; }
-      else { frame = D.F-1; setPlaying(false); }
+      else { frame = D.F-1; scrub.value = frame; draw(); setPlaying(false); return; }
     }
     scrub.value = frame;
     draw();
   }
-  if (playing) requestAnimationFrame(tick);
+  requestAnimationFrame(tick);
 }
 playB.onclick = () => setPlaying(!playing);
-document.getElementById('back').onclick = () => { frame=Math.max(0,frame-1); scrub.value=frame; draw(); };
-document.getElementById('fwd').onclick  = () => { frame=Math.min(D.F-1,frame+1); scrub.value=frame; draw(); };
-scrub.oninput = e => { frame = +e.target.value; draw(); };
+document.getElementById('back').onclick = () => { setPlaying(false); frame=Math.max(0,frame-1); scrub.value=frame; draw(); };
+document.getElementById('fwd').onclick  = () => { setPlaying(false); frame=Math.min(D.F-1,frame+1); scrub.value=frame; draw(); };
+document.getElementById('rst').onclick  = () => { setPlaying(false); frame=0; scrub.value=0; draw(); };
+scrub.oninput = e => { setPlaying(false); frame = +e.target.value; draw(); };
 document.addEventListener('keydown', e => {
   if (e.code === 'Space'){ e.preventDefault(); setPlaying(!playing); }
 });
