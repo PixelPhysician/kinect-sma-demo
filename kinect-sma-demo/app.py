@@ -382,7 +382,8 @@ with _tabs["Session viewer"]:
 
     if selected:
         st.markdown('<span class="cap">Traces shown: ' + " &nbsp;·&nbsp; ".join(
-            f"<b>{K.FEATURE_DISPLAY_NAMES[k]}</b> - {K.TRACE_MEANING[k]}"
+            f"<b>{K.FEATURE_DISPLAY_NAMES[k]}</b>"
+            + (f" - {K.TRACE_MEANING[k]}" if K.TRACE_MEANING.get(k) else "")
             for k in selected) + "</span>", unsafe_allow_html=True)
 
     st.divider()
